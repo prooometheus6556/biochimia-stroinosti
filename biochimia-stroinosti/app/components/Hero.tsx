@@ -44,13 +44,13 @@ export default function Hero() {
 
             {/* Headline */}
             <div className="space-y-2">
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-extrabold leading-tight tracking-tight">
-                Минус <span className="text-5xl sm:text-6xl lg:text-7xl xl:text-8xl bg-gradient-to-r from-gold via-gold-light to-gold bg-clip-text text-transparent">29 кг</span>
+              <h1 className="text-5xl sm:text-5xl lg:text-6xl xl:text-7xl font-extrabold leading-tight tracking-tight">
+                Минус <span className="text-6xl sm:text-6xl lg:text-7xl xl:text-8xl bg-gradient-to-r from-gold via-gold-light to-gold bg-clip-text text-transparent">29 кг</span>
               </h1>
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-extrabold leading-tight tracking-tight text-foreground">
+              <h1 className="text-5xl sm:text-5xl lg:text-6xl xl:text-7xl font-extrabold leading-tight tracking-tight text-foreground">
                 без жестких диет
               </h1>
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-extrabold leading-tight tracking-tight text-foreground">
+              <h1 className="text-5xl sm:text-5xl lg:text-6xl xl:text-7xl font-extrabold leading-tight tracking-tight text-foreground">
                 и срывов
               </h1>
             </div>
