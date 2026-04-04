@@ -7,9 +7,14 @@ export async function POST(request: NextRequest) {
     const botToken = process.env.TELEGRAM_BOT_TOKEN
     const chatId = process.env.TELEGRAM_CHAT_ID
 
+    console.log('=== LEAD API ===')
+    console.log('botToken:', botToken ? 'SET' : 'NOT SET')
+    console.log('chatId:', chatId ? 'SET' : 'NOT SET')
+    console.log('================')
+
     if (!botToken || !chatId) {
       return NextResponse.json(
-        { error: 'Telegram not configured' },
+        { error: 'Telegram not configured', botToken: !!botToken, chatId: !!chatId },
         { status: 500 }
       )
     }
