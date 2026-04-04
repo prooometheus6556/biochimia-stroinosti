@@ -85,6 +85,20 @@ export default function LeadForm() {
         throw new Error('Failed to submit')
       }
       
+      // Save to localStorage for admin dashboard
+      const newLead = {
+        id: Date.now().toString(),
+        created_at: new Date().toISOString(),
+        name: formData.name,
+        telegram: formData.telegram,
+        email: formData.email || '',
+        goal: formData.goal,
+        status: 'new',
+        notes: '',
+      }
+      const existingLeads = JSON.parse(localStorage.getItem('leads') || '[]')
+      localStorage.setItem('leads', JSON.stringify([newLead, ...existingLeads]))
+      
       setIsSuccess(true)
       localStorage.setItem('leadSubmitted', 'true')
     } catch (error) {
