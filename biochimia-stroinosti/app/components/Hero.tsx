@@ -43,14 +43,14 @@ export default function Hero() {
             </div>
 
             {/* Headline */}
-            <div className="space-y-1">
-              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold leading-[1.05] tracking-tight">
-                Минус <span className="bg-gradient-to-r from-gold via-gold-light to-gold bg-clip-text text-transparent">29 кг</span>
+            <div className="space-y-2">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-extrabold leading-tight tracking-tight">
+                Минус <span className="text-5xl sm:text-6xl lg:text-7xl xl:text-8xl bg-gradient-to-r from-gold via-gold-light to-gold bg-clip-text text-transparent">29 кг</span>
               </h1>
-              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold leading-[1.05] tracking-tight text-foreground">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-extrabold leading-tight tracking-tight text-foreground">
                 без жестких диет
               </h1>
-              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold leading-[1.05] tracking-tight text-foreground">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-extrabold leading-tight tracking-tight text-foreground">
                 и срывов
               </h1>
             </div>
@@ -222,7 +222,7 @@ export default function Hero() {
                           <span className="text-xs font-semibold text-white">ДО</span>
                         </div>
                         <div className="absolute bottom-3 left-3">
-                          <p className="text-white font-bold text-base">114 кг</p>
+                          <p className="text-white font-bold text-base">104 кг</p>
                         </div>
                       </div>
                     </div>
@@ -241,7 +241,7 @@ export default function Hero() {
                           <span className="text-xs font-semibold text-white">ПОСЛЕ</span>
                         </div>
                         <div className="absolute bottom-3 left-3">
-                          <p className="text-white font-bold text-base">85 кг</p>
+                          <p className="text-white font-bold text-base">75 кг</p>
                         </div>
                       </div>
                     </div>
