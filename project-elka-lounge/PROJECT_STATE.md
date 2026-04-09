@@ -298,6 +298,7 @@ TELEGRAM_CHAT_ID=333906877
 | 23 | Откат и правильный фикс: стол 11.5 возвращён, добавлен DISPLAY_NUMBER_MAP (Path A + Path B SQL) | ✅ |
 | 24 | Graphite theme redesign + AdminClient с вкладками + TableManagementModal | ✅ |
 | 25 | Фикс timezone handling: lib/datetime.ts + исправления в UpcomingBookings, Chessboard, TableManagementModal | ✅ |
+| 26 | Система No-Show и Early Leave: updateReservationStatus с endEarly, кнопки отмены/освобождения | ✅ |
 
 ### 📋 Бэклог
 
@@ -313,7 +314,7 @@ TELEGRAM_CHAT_ID=333906877
 
 | Окружение | URL | Примечание |
 |-----------|-----|------------|
-| Production | https://project-elka-lounge.vercel.app | Последний: 9tmCTnmRQzYC1teYugda8hbEVfWq |
+| Production | https://project-elka-lounge.vercel.app | Последний: 3MDvQw1aq4mCJxNpmQpgFAAVNqFN |
 | Preview | vercel.app/*/project-elka-lounge | Перед merge |
 
 **⚠️ ВАЖНО: После каждой итерации обязательно запускать `npx vercel --prod` для деплоя в production!**
