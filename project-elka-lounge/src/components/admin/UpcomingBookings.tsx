@@ -61,13 +61,13 @@ export default function UpcomingBookings({ reservations, tables, onReservationCh
 
     try {
       const result = await updateReservationStatus(reservation.id, "seated");
-      if (result.success) {
-        toast.success("Гость посажен за стол");
-        onReservationChange?.();
-        router.refresh();
-      } else {
-        toast.error(result.message);
+      if (!result.success) {
+        toast.error(result.error ?? "Ошибка при посадке гостя");
+        return;
       }
+      toast.success("Гость посажен за стол");
+      onReservationChange?.();
+      router.refresh();
     } catch {
       toast.error("Ошибка при посадке гостя");
     } finally {
@@ -80,13 +80,13 @@ export default function UpcomingBookings({ reservations, tables, onReservationCh
 
     try {
       const result = await updateReservationStatus(reservationId, "cancelled", true);
-      if (result.success) {
-        toast.success("Бронь отменена");
-        onReservationChange?.();
-        router.refresh();
-      } else {
-        toast.error(result.message);
+      if (!result.success) {
+        toast.error(result.error ?? "Ошибка при отмене");
+        return;
       }
+      toast.success("Бронь отменена");
+      onReservationChange?.();
+      router.refresh();
     } catch {
       toast.error("Ошибка при отмене брони");
     } finally {
