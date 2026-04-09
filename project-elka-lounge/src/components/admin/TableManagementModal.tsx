@@ -690,8 +690,8 @@ function DateTimeSelector({ date, time, onDateChange }: DateTimeSelectorProps) {
 
   return (
     <div className="grid grid-cols-2 gap-3">
-      <div className="space-y-1">
-        <label className="text-[#98989D] text-xs">Дата</label>
+      <div className="relative">
+        <label className="block text-[#98989D] text-xs mb-1">Дата</label>
         <button
           type="button"
           onClick={() => setShowCalendar(!showCalendar)}
@@ -704,7 +704,7 @@ function DateTimeSelector({ date, time, onDateChange }: DateTimeSelectorProps) {
         </button>
 
         {showCalendar && (
-          <div className="absolute z-50 mt-1 bg-[#1C1C1E] border border-[#3A3A3C] rounded-2xl p-4 shadow-2xl">
+          <div className="absolute top-full left-0 mt-2 z-[9999] bg-[#1C1C1E] border border-[#3A3A3C] rounded-2xl p-4 shadow-2xl min-w-[280px]">
             <div className="flex items-center justify-between mb-4">
               <button onClick={prevMonth} className="p-1 hover:bg-[#3A3A3C] rounded-lg transition-colors">
                 <ChevronLeft className="w-5 h-5 text-[#98989D]" />
