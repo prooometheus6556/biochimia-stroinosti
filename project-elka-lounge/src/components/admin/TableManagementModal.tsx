@@ -54,10 +54,6 @@ function getTableReservationsForDay(
     });
 }
 
-function isBlockReservation(r: Reservation): boolean {
-  return (r.guest?.name ?? "").toUpperCase().startsWith("БЛОК:");
-}
-
 export default function TableManagementModal({
   isOpen,
   onClose,
@@ -77,7 +73,7 @@ export default function TableManagementModal({
   const [durationHours, setDurationHours] = useState(3);
   const [isBlock, setIsBlock] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [, setProcessingId] = useState<string | null>(null);
 
   const selectedTable = useMemo(() => tables.find((t) => t.id === selectedTableId), [tables, selectedTableId]);
 
@@ -199,10 +195,6 @@ export default function TableManagementModal({
       toast.error(result.message);
     }
   }, [isSubmitting, selectedTableId, date, time, name, phone, guests, durationHours, isBlock, resetForm, onSuccess]);
-
-  const isCurrentlySeated = useMemo(() => {
-    return tableReservations.some(r => r.status === "seated");
-  }, [tableReservations]);
 
   if (!isOpen) return null;
 
