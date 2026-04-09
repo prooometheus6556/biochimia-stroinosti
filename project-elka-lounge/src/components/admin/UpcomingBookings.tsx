@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Users, Clock, MapPin, AlertTriangle, X, UserX } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Users, Clock, MapPin, AlertTriangle, UserX } from "lucide-react";
 import { Reservation, Table, updateReservationStatus } from "@/app/actions/admin";
 import { toDisplayNumber } from "@/lib/tableDisplay";
 import { formatTimeLocal, parseToLocalDateTime, getHoursDiff } from "@/lib/datetime";
+import { toast } from "sonner";
 
 function isBlockReservation(r: Reservation): boolean {
   const name = r.guest?.name ?? "";
@@ -14,18 +16,15 @@ function isBlockReservation(r: Reservation): boolean {
 interface UpcomingBookingsProps {
   reservations: Reservation[];
   tables: Table[];
-  onSeatGuest?: (reservationId: string, tableId: string) => void;
   onReservationChange?: () => void;
 }
 
 const HIDE_AFTER_HOURS = 3;
 
-export default function UpcomingBookings({ reservations, tables, onSeatGuest, onReservationChange }: UpcomingBookingsProps) {
-  const [seatingReservation, setSeatingReservation] = useState<string | null>(null);
-  const [selectedTable, setSelectedTable] = useState<string>("");
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [cancellingReservation, setCancellingReservation] = useState<string | null>(null);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+export default function UpcomingBookings({ reservations, tables, onReservationChange }: UpcomingBookingsProps) {
+  const router = useRouter();
+  const [seatingReservationId, setSeatingReservationId] = useState<string | null>(null);
+  const [cancellingReservationId, setCancellingReservationId] = useState<string | null>(null);
   const [, forceRender] = useState(0);
 
   const activeReservations = reservations
@@ -46,72 +45,52 @@ export default function UpcomingBookings({ reservations, tables, onSeatGuest, on
     return () => clearInterval(interval);
   }, []);
 
-  const seatedTableIds = reservations
-    .filter((r) => r.status === "seated")
-    .map((r) => r.table_id)
-    .filter(Boolean);
-
-  const freeTables = tables.filter((t) => !seatedTableIds.includes(t.id));
-
-  const getTimeFromDate = (dateString: string | null | undefined) => {
-    return formatTimeLocal(dateString);
-  };
-
   const getTableName = (tableId: string | null, tables: Table[]) => {
     if (!tableId) return null;
     const table = tables.find((t) => t.id === tableId);
     return table ? `Стол ${toDisplayNumber(table.number)}` : null;
   };
 
-  useEffect(() => {
-    console.log("[UpcomingBookings] Received reservations:", JSON.stringify(reservations, null, 2));
-    console.log("[UpcomingBookings] Active reservations:", JSON.stringify(activeReservations.map(r => ({
-      id: r.id,
-      arrival_time: r.arrival_time,
-      status: r.status,
-      guest: r.guest?.name
-    })), null, 2));
-  }, [reservations, activeReservations]);
+  const handleSeatGuest = async (reservation: Reservation) => {
+    if (!reservation.table_id) {
+      toast.error("У брони нет номера стола");
+      return;
+    }
 
-  const handleSeat = async () => {
-    if (!selectedTable || !seatingReservation || !onSeatGuest) return;
-
-    setMessage(null);
-    setIsProcessing(true);
-
-    const reservationId = seatingReservation;
-    const tableId = selectedTable;
-    
-    setSeatingReservation(null);
-    setSelectedTable("");
+    setSeatingReservationId(reservation.id);
 
     try {
-      await onSeatGuest(reservationId, tableId);
-      setMessage({ type: "success", text: "Гость успешно посажен!" });
-      onReservationChange?.();
+      const result = await updateReservationStatus(reservation.id, "seated");
+      if (result.success) {
+        toast.success("Гость посажен за стол");
+        onReservationChange?.();
+        router.refresh();
+      } else {
+        toast.error(result.message);
+      }
     } catch {
-      setMessage({ type: "error", text: "Ошибка при посадке гостя" });
+      toast.error("Ошибка при посадке гостя");
     } finally {
-      setIsProcessing(false);
+      setSeatingReservationId(null);
     }
   };
 
   const handleCancel = async (reservationId: string) => {
-    setMessage(null);
-    setCancellingReservation(reservationId);
+    setCancellingReservationId(reservationId);
 
     try {
       const result = await updateReservationStatus(reservationId, "cancelled", true);
       if (result.success) {
-        setMessage({ type: "success", text: "Бронь отменена" });
+        toast.success("Бронь отменена");
         onReservationChange?.();
+        router.refresh();
       } else {
-        setMessage({ type: "error", text: result.message });
+        toast.error(result.message);
       }
     } catch {
-      setMessage({ type: "error", text: "Ошибка при отмене брони" });
+      toast.error("Ошибка при отмене брони");
     } finally {
-      setCancellingReservation(null);
+      setCancellingReservationId(null);
     }
   };
 
@@ -125,16 +104,6 @@ export default function UpcomingBookings({ reservations, tables, onSeatGuest, on
           </span>
         </div>
       </div>
-
-      {message && (
-        <div className={`mx-4 mt-4 p-3 rounded-xl text-sm ${
-          message.type === "success" 
-            ? "bg-green-900/30 border border-green-500/30 text-green-400" 
-            : "bg-red-900/30 border border-red-500/30 text-red-400"
-        }`}>
-          {message.text}
-        </div>
-      )}
 
       <div className="max-h-[600px] overflow-y-auto">
         {activeReservations.length === 0 ? (
@@ -150,6 +119,9 @@ export default function UpcomingBookings({ reservations, tables, onSeatGuest, on
             {activeReservations.map((item) => {
               const tableName = getTableName(item.table_id, tables);
               const isBlocked = isBlockReservation(item);
+              const isSeating = seatingReservationId === item.id;
+              const isCancelling = cancellingReservationId === item.id;
+              const isProcessing = isSeating || isCancelling;
 
               return (
                 <div key={item.id} className={`p-4 hover:bg-[#3A3A3C]/30 transition-colors ${isProcessing ? "opacity-50" : ""}`}>
@@ -157,7 +129,7 @@ export default function UpcomingBookings({ reservations, tables, onSeatGuest, on
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className={`font-bold text-lg ${isBlocked ? "text-orange-400" : "text-[#9ffb00]"}`}>
-                          {getTimeFromDate(item.arrival_time)}
+                          {formatTimeLocal(item.arrival_time)}
                         </span>
                         {isBlocked && (
                           <span className="flex items-center gap-1 px-2 py-0.5 bg-orange-500/20 text-orange-400 text-xs rounded-full">
@@ -191,59 +163,38 @@ export default function UpcomingBookings({ reservations, tables, onSeatGuest, on
                     </div>
                   </div>
 
-                  {!isBlocked && (seatingReservation === item.id ? (
-                    <div className="space-y-2">
-                      <select
-                        value={selectedTable}
-                        onChange={(e) => setSelectedTable(e.target.value)}
-                        className="w-full h-12 bg-[#1C1C1E] border border-[#3A3A3C] rounded-xl text-white px-4 appearance-none cursor-pointer"
-                      >
-                        <option value="">Выберите стол</option>
-                        {freeTables.map((table) => (
-                          <option key={table.id} value={table.id}>
-                            Стол {toDisplayNumber(table.number)}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={handleSeat}
-                          disabled={!selectedTable || isProcessing}
-                          className="flex-1 py-3 px-4 bg-[#9ffb00] hover:bg-[#8bdc00] text-black font-semibold rounded-xl text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                        >
-                          <MapPin className="w-4 h-4" />
-                          {isProcessing ? "Посадка..." : "Подтвердить"}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setSeatingReservation(null);
-                            setSelectedTable("");
-                          }}
-                          className="py-3 px-4 bg-[#3A3A3C] hover:bg-[#4A4A4C] text-white rounded-xl transition-colors"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
+                  {!isBlocked && (
                     <div className="space-y-2">
                       <button
-                        onClick={() => setSeatingReservation(item.id)}
-                        disabled={isProcessing || cancellingReservation === item.id || freeTables.length === 0}
-                        className="w-full py-3 px-4 bg-[#9ffb00] hover:bg-[#8bdc00] text-black font-semibold rounded-xl text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={() => handleSeatGuest(item)}
+                        disabled={isProcessing}
+                        className="w-full py-3 px-4 bg-[#9ffb00] hover:bg-[#8bdc00] text-black font-bold rounded-xl text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                       >
-                        {freeTables.length === 0 ? "Нет свободных столов" : "Посадить гостя"}
+                        {isSeating ? (
+                          <>
+                            <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                            Сажаем...
+                          </>
+                        ) : (
+                          <>
+                            <MapPin className="w-4 h-4" />
+                            Посадить гостя
+                          </>
+                        )}
                       </button>
                       <button
                         onClick={() => handleCancel(item.id)}
-                        disabled={isProcessing || cancellingReservation === item.id}
+                        disabled={isProcessing}
                         className="w-full py-2 px-4 bg-red-500/20 hover:bg-red-500/30 text-red-400 font-medium rounded-xl text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                       >
                         <UserX className="w-4 h-4" />
-                        {cancellingReservation === item.id ? "Отмена..." : "Неявка / Отмена"}
+                        {isCancelling ? "Отмена..." : "Неявка / Отмена"}
                       </button>
                     </div>
-                  ))}
+                  )}
 
                   {isBlocked && (
                     <div className="py-3 px-4 bg-orange-500/20 border border-orange-500/30 rounded-xl text-center">

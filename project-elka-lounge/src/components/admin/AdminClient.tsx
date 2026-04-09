@@ -57,18 +57,6 @@ export default function AdminClient({ tables, reservations, menuItems }: AdminCl
     router.refresh();
   }, [router]);
 
-  const handleSeatGuest = useCallback(async (reservationId: string, tableId: string) => {
-    console.log('[ADMIN] Optimistic update: seating guest', reservationId, 'at table', tableId);
-    
-    setLocalReservations(prev =>
-      prev.map(r => r.id === reservationId ? { ...r, status: 'seated' as const, table_id: tableId } : r)
-    );
-    
-    const { seatGuest } = await import("@/app/actions/admin");
-    await seatGuest(reservationId, tableId);
-    router.refresh();
-  }, [router]);
-
   const tabs = [
     { id: "booking" as const, label: "Бронирование", icon: Calendar },
     { id: "stoplist" as const, label: "Стоп-лист", icon: UtensilsCrossed },
@@ -115,7 +103,6 @@ export default function AdminClient({ tables, reservations, menuItems }: AdminCl
               tables={tables} 
               reservations={localReservations}
               onFreeTable={handleFreeTable}
-              onSeatGuest={handleSeatGuest}
               onReservationCreated={() => router.refresh()}
             />
           </div>
@@ -124,7 +111,7 @@ export default function AdminClient({ tables, reservations, menuItems }: AdminCl
             <UpcomingBookings 
               reservations={localReservations} 
               tables={tables}
-              onSeatGuest={handleSeatGuest}
+              onReservationChange={() => router.refresh()}
             />
           </div>
         </div>
