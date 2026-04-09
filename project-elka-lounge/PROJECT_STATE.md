@@ -301,6 +301,7 @@ TELEGRAM_CHAT_ID=333906877
 | 26 | Система No-Show и Early Leave: updateReservationStatus с endEarly, кнопки отмены/освобождения | ✅ |
 | 27 | Фикс timezone, редизайн date/time, защита вместимости для малых столов | ✅ |
 | 28 | CORE TIMEZONE RULE: жесткий UTC+7, убраны getHours(), date/time inputs активны | ✅ |
+| 29 | One-click "Посадить гостя" без выбора стола, toast уведомления | ✅ |
 
 ### 📋 Бэклог
 
@@ -316,7 +317,7 @@ TELEGRAM_CHAT_ID=333906877
 
 | Окружение | URL | Примечание |
 |-----------|-----|------------|
-| Production | https://project-elka-lounge.vercel.app | Последний: EiaVsBvVxngZzzMYGVY8FVbWVjVp |
+| Production | https://project-elka-lounge.vercel.app | Последний: D951BHFwq98jaknWh1Evim7fuT5B |
 | Preview | vercel.app/*/project-elka-lounge | Перед merge |
 
 **⚠️ ВАЖНО: После каждой итерации обязательно запускать `npx vercel --prod` для деплоя в production!**
