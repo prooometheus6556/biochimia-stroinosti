@@ -14,8 +14,30 @@ export interface ValidationResult {
   error?: string;
 }
 
-export function validateTimeNotPast(arrivalTime: string): ValidationResult {
-  const arrivalMinutes = getMinutesFromMidnightLocalTZ(arrivalTime);
+const TZ = "Asia/Novosibirsk";
+
+export function isOvernightBooking(dateStr: string, timeStr: string): boolean {
+  const { hours } = getCurrentTimeInLocalTZ();
+  const currentMinutes = hours * 60;
+  const [h, m] = timeStr.split(":").map(Number);
+  const selectedMinutes = h * 60 + m;
+  return selectedMinutes < 360 && currentMinutes > 1080;
+}
+
+export function getEffectiveDate(dateStr: string, timeStr: string): string {
+  if (isOvernightBooking(dateStr, timeStr)) {
+    const d = new Date(dateStr + "T00:00:00");
+    d.setDate(d.getDate() + 1);
+    return d.toLocaleDateString("en-CA", { timeZone: TZ });
+  }
+  return dateStr;
+}
+
+export function validateTimeNotPast(dateStr: string, timeStr: string): ValidationResult {
+  const effectiveDate = getEffectiveDate(dateStr, timeStr);
+  const arrivalISO = `${effectiveDate}T${timeStr}:00+07:00`;
+  
+  const arrivalMinutes = getMinutesFromMidnightLocalTZ(arrivalISO);
   if (arrivalMinutes === null) {
     return { valid: false, error: "Некорректное время прибытия" };
   }
@@ -23,25 +45,9 @@ export function validateTimeNotPast(arrivalTime: string): ValidationResult {
   const { hours, minutes } = getCurrentTimeInLocalTZ();
   const nowMinutes = hours * 60 + minutes;
 
-  // Parse the date part to check if it's today
-  const todayDateStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Novosibirsk" });
-  const arrivalDate = new Date(arrivalTime).toLocaleDateString("en-CA", { timeZone: "Asia/Novosibirsk" });
-  const isToday = todayDateStr === arrivalDate;
+  const effectiveMins = isOvernightBooking(dateStr, timeStr) ? arrivalMinutes + 1440 : arrivalMinutes;
 
-  // For today's bookings: handle overnight logic
-  // If current time is late night (>18:00) and selected time is early morning (<6:00),
-  // this is a booking for the next day, so add 24 hours to arrival minutes
-  if (isToday && arrivalMinutes < 360 && nowMinutes > 1080) {
-    // Early morning (0-6am) selected while it's late evening (>18:00) = next day
-    const adjustedArrivalMinutes = arrivalMinutes + 1440; // Add 24 hours
-    if (adjustedArrivalMinutes < nowMinutes) {
-      return { valid: false, error: "Нельзя бронировать на прошедшее время" };
-    }
-    return { valid: true };
-  }
-
-  // Normal case: if arrival time is in the past
-  if (arrivalMinutes < nowMinutes) {
+  if (effectiveMins < nowMinutes) {
     return { valid: false, error: "Нельзя бронировать на прошедшее время" };
   }
 
@@ -50,7 +56,8 @@ export function validateTimeNotPast(arrivalTime: string): ValidationResult {
 
 export async function validateTableFree(
   tableId: string,
-  arrivalTime: string,
+  dateStr: string,
+  timeStr: string,
   durationMinutes: number,
   excludeReservationId?: string
 ): Promise<ValidationResult> {
@@ -59,18 +66,27 @@ export async function validateTableFree(
     return { valid: false, error: "Ошибка подключения к базе данных" };
   }
 
-  const arrivalMins = getMinutesFromMidnightLocalTZ(arrivalTime);
+  const effectiveDate = getEffectiveDate(dateStr, timeStr);
+  const isOvernight = isOvernightBooking(dateStr, timeStr);
+  
+  const arrivalISO = `${effectiveDate}T${timeStr}:00+07:00`;
+  const arrivalMins = getMinutesFromMidnightLocalTZ(arrivalISO);
   if (arrivalMins === null) {
     return { valid: false, error: "Некорректное время прибытия" };
   }
 
   const endMins = arrivalMins + durationMinutes;
 
+  const startOfDayUTC = new Date(effectiveDate + "T00:00:00+07:00").toISOString();
+  const endOfDayUTC = new Date(effectiveDate + "T23:59:59+07:00").toISOString();
+
   let query = supabase
     .from("reservations")
     .select("id, arrival_time, expected_duration_minutes")
     .eq("table_id", tableId)
-    .in("status", ["pending", "seated"]);
+    .in("status", ["waitlist", "confirmed", "seated"])
+    .gte("arrival_time", startOfDayUTC)
+    .lte("arrival_time", endOfDayUTC);
 
   if (excludeReservationId) {
     query = query.neq("id", excludeReservationId);
@@ -91,8 +107,10 @@ export async function validateTableFree(
     if (resArrivalMins === null) continue;
 
     const resEndMins = resArrivalMins + res.expected_duration_minutes;
+    const checkArrival = isOvernight ? arrivalMins + 1440 : arrivalMins;
+    const checkEnd = isOvernight ? endMins + 1440 : endMins;
 
-    const overlaps = arrivalMins < resEndMins && endMins > resArrivalMins;
+    const overlaps = checkArrival < resEndMins && checkEnd > resArrivalMins;
     if (overlaps) {
       return {
         valid: false,

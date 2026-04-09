@@ -2,6 +2,12 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
+import {
+  validateTimeNotPast,
+  validatePhysicalTableState,
+  validateReservationHasTable,
+  getEffectiveDate,
+} from "@/lib/validators";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -235,6 +241,12 @@ export async function createAdminReservation(data: AdminReservationData): Promis
       return { success: false, message: "Не указаны дата или время" };
     }
 
+    const timeCheck = validateTimeNotPast(date, time);
+    if (!timeCheck.valid) {
+      return { success: false, message: timeCheck.error! };
+    }
+
+    const effectiveDate = getEffectiveDate(date, time);
     const isBlock = name.trim().toUpperCase().startsWith("БЛОК:");
 
     const results = await Promise.all(
@@ -242,9 +254,10 @@ export async function createAdminReservation(data: AdminReservationData): Promis
         if (!isValidUUID(tableId)) {
           return Promise.resolve({ success: false, error: "Invalid table ID" });
         }
+        const arrivalISO = toLocalISOStringWithOffset(effectiveDate, time);
         console.log("[ADMIN_BOOKING] Отправка в RPC:", {
           p_table_id: tableId,
-          p_arrival_time: toLocalISOStringWithOffset(date, time),
+          p_arrival_time: arrivalISO,
           p_expected_duration_minutes: durationMinutes,
           p_guest_name: name.trim(),
           p_guest_phone: phone,
@@ -252,7 +265,7 @@ export async function createAdminReservation(data: AdminReservationData): Promis
         });
         return supabase.rpc("book_table_safe", {
           p_table_id: tableId,
-          p_arrival_time: toLocalISOStringWithOffset(date, time),
+          p_arrival_time: arrivalISO,
           p_expected_duration_minutes: durationMinutes,
           p_guest_name: name.trim(),
           p_guest_phone: phone,
@@ -297,6 +310,7 @@ export async function createAdminReservation(data: AdminReservationData): Promis
     }
 
     revalidatePath("/admin");
+    revalidatePath("/", "layout");
 
     Promise.resolve().then(() =>
       sendAdminTelegramNotification({
@@ -341,13 +355,21 @@ export async function updateReservationStatus(
   reservationId: string,
   newStatus: Reservation["status"],
   endEarly: boolean = false
-): Promise<{ success: boolean; message: string }> {
+): Promise<{ success: boolean; error?: string }> {
   try {
     if (!supabaseUrl || !supabaseServiceKey) {
-      return { success: false, message: "Missing environment variables" };
+      return { success: false, error: "Missing environment variables" };
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    if (newStatus === "seated") {
+      const tableCheck = await validateReservationHasTable(reservationId);
+      if (!tableCheck.valid) return { success: false, error: tableCheck.error };
+
+      const physicalCheck = await validatePhysicalTableState(tableCheck.tableId!, reservationId);
+      if (!physicalCheck.valid) return { success: false, error: physicalCheck.error };
+    }
 
     const updateData: Record<string, unknown> = { status: newStatus };
 
@@ -368,19 +390,212 @@ export async function updateReservationStatus(
       }
     }
 
-    const { error } = await supabase
+    const { error: dbError } = await supabase
       .from("reservations")
       .update(updateData)
       .eq("id", reservationId);
 
-    if (error) {
-      return { success: false, message: error.message };
+    if (dbError) {
+      return { success: false, error: dbError.message };
     }
 
     revalidatePath("/admin");
-    return { success: true, message: "Статус обновлен" };
+    revalidatePath("/", "layout");
+    return { success: true };
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    return { success: false, error: `Ошибка: ${errorMessage}` };
+  }
+}
+
+export interface WalkInTable {
+  id: string;
+  number: number;
+  capacity: number;
+  features: string[];
+  maxDurationMinutes: number | null;
+  nextReservationTime: string | null;
+}
+
+export async function getWalkInAvailableTables(
+  reservations: Reservation[],
+  tables: Table[]
+): Promise<WalkInTable[]> {
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+  const seatedReservationTableIds = new Set(
+    reservations
+      .filter(r => r.status === "seated")
+      .map(r => r.table_id)
+      .filter(Boolean)
+  );
+
+  const activeReservationByTable: Record<string, Reservation> = {};
+  for (const res of reservations) {
+    if (res.status === "seated" || res.status === "confirmed" || res.status === "waitlist") {
+      const arrivalMins = parseArrivalTimeMinutes(res.arrival_time);
+      if (arrivalMins === null) continue;
+      const endMins = arrivalMins + res.expected_duration_minutes;
+      if (arrivalMins <= nowMinutes && endMins > nowMinutes) {
+        activeReservationByTable[res.table_id ?? ""] = res;
+      }
+    }
+  }
+
+  const result: WalkInTable[] = [];
+
+  for (const table of tables) {
+    if (!table.is_active) continue;
+    if (seatedReservationTableIds.has(table.id)) continue;
+    if (activeReservationByTable[table.id]) continue;
+
+    const todayReservations = reservations
+      .filter(r => r.table_id === table.id && r.status !== "cancelled" && r.status !== "completed")
+      .sort((a, b) => new Date(a.arrival_time).getTime() - new Date(b.arrival_time).getTime());
+
+    const nextRes = todayReservations.find(r => {
+      const arrivalMins = parseArrivalTimeMinutes(r.arrival_time);
+      if (arrivalMins === null) return false;
+      return arrivalMins > nowMinutes;
+    });
+
+    let maxDuration: number | null = null;
+    let nextTime: string | null = null;
+
+    if (nextRes) {
+      const nextArrivalMins = parseArrivalTimeMinutes(nextRes.arrival_time);
+      if (nextArrivalMins !== null) {
+        maxDuration = nextArrivalMins - nowMinutes;
+        nextTime = nextRes.arrival_time;
+      }
+    }
+
+    result.push({
+      id: table.id,
+      number: table.number,
+      capacity: table.capacity,
+      features: table.features,
+      maxDurationMinutes: maxDuration,
+      nextReservationTime: nextTime,
+    });
+  }
+
+  return result;
+}
+
+export async function createWalkIn(params: {
+  tableId: string;
+  guestName: string;
+  guestPhone: string;
+  guestsCount: number;
+  durationMinutes: number;
+}): Promise<{ success: boolean; message: string }> {
+  try {
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return { success: false, message: "Missing environment variables" };
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const { tableId, guestName, guestPhone, guestsCount, durationMinutes } = params;
+
+    if (!guestName.trim()) {
+      return { success: false, message: "Введите имя гостя" };
+    }
+
+    const now = new Date();
+    const arrivalTime = now.toISOString();
+    const safePhone = guestPhone?.trim() || `WI-${Date.now().toString().slice(-8)}`;
+
+    let guestId: string;
+    const { data: existingGuest } = await supabase
+      .from("guests")
+      .select("id")
+      .eq("phone", safePhone)
+      .maybeSingle();
+
+    if (existingGuest) {
+      guestId = existingGuest.id;
+    } else {
+      const { data: newGuest, error: guestError } = await supabase
+        .from("guests")
+        .insert({
+          phone: safePhone,
+          name: guestName.trim().slice(0, 50),
+          is_adult: true,
+        })
+        .select("id")
+        .single();
+
+      if (guestError || !newGuest) {
+        return { success: false, message: `Ошибка создания гостя: ${guestError?.message}` };
+      }
+      guestId = newGuest.id;
+    }
+
+    const { data: tableInfo } = await supabase
+      .from("tables")
+      .select("number")
+      .eq("id", tableId)
+      .single();
+
+    const physicalCheck = await validatePhysicalTableState(tableId);
+    if (!physicalCheck.valid) {
+      return { success: false, message: physicalCheck.error! };
+    }
+
+    const { error: insertError } = await supabase
+      .from("reservations")
+      .insert({
+        guest_id: guestId,
+        table_id: tableId,
+        status: "seated",
+        expected_duration_minutes: durationMinutes,
+        arrival_time: arrivalTime,
+      });
+
+    if (insertError) {
+      return { success: false, message: `Ошибка при посадке: ${insertError.message}` };
+    }
+
+    revalidatePath("/admin");
+    revalidatePath("/", "layout");
+
+    const formattedTime = now.toLocaleTimeString("ru-RU", {
+      timeZone: "Asia/Novosibirsk",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    const formattedDate = now.toLocaleDateString("ru-RU", {
+      timeZone: "Asia/Novosibirsk",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+
+    Promise.resolve().then(() => {
+      if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
+      const message = `🚶 *Walk-in*
+
+👤 Гость: *${guestName.trim()}*
+📞 Телефон: ${guestPhone || "—"}
+📅 Дата: ${formattedDate}
+🕐 Время: ${formattedTime}
+👥 Гостей: ${guestsCount}
+⏱ Длительность: ${durationMinutes} мин
+🪑 Стол: ${tableInfo ? `Стол ${tableInfo.number}` : "—"}`;
+
+      fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: message, parse_mode: "Markdown" }),
+      }).catch(e => console.error("[TELEGRAM] Walk-in notification failed:", e));
+    });
+
+    return { success: true, message: `Гость "${guestName.trim()}" успешно посажен за стол ${tableInfo?.number ?? ""}` };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    return { success: false, message: errorMessage };
+    return { success: false, message: `Ошибка: ${errorMessage}` };
   }
 }
