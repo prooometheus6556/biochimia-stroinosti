@@ -303,6 +303,7 @@ TELEGRAM_CHAT_ID=333906877
 | 28 | CORE TIMEZONE RULE: жесткий UTC+7, убраны getHours(), date/time inputs активны | ✅ |
 | 29 | One-click "Посадить гостя" без выбора стола, toast уведомления | ✅ |
 | 30 | Фикс позиционирования календаря: relative контейнер, top-full, z-[9999] | ✅ |
+| 31 | Timeline view: все брони стола на день, карточки, inline форма добавления | ✅ |
 
 ### 📋 Бэклог
 
@@ -318,7 +319,7 @@ TELEGRAM_CHAT_ID=333906877
 
 | Окружение | URL | Примечание |
 |-----------|-----|------------|
-| Production | https://project-elka-lounge.vercel.app | Последний: ALyy6QZwygmGocRmSgbV8F2dS7q8 |
+| Production | https://project-elka-lounge.vercel.app | Последний: HTLza5yp2WxoaAPUVf7tC1rb7aCA |
 | Preview | vercel.app/*/project-elka-lounge | Перед merge |
 
 **⚠️ ВАЖНО: После каждой итерации обязательно запускать `npx vercel --prod` для деплоя в production!**
