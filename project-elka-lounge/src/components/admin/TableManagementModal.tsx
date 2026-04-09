@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { X, AlertTriangle, Check, Plus, Minus, CheckCircle2, XCircle, LogOut, Calendar, Clock } from "lucide-react";
+import { X, AlertTriangle, Check, Plus, Minus, CheckCircle2, XCircle, LogOut } from "lucide-react";
 import { createAdminReservation, updateReservationStatus } from "@/app/actions/admin";
 import { toDisplayNumber } from "@/lib/tableDisplay";
-import { formatTimeLocal } from "@/lib/datetime";
+import { formatTimeLocal, getCurrentTimeInLocalTZ } from "@/lib/datetime";
 import { toast } from "sonner";
 import { Table, Reservation } from "@/app/actions/admin";
 
@@ -36,7 +36,8 @@ function getLocalHoursMinutes(isoString: string | null | undefined): { hours: nu
 function getDayStartLocal(): { date: string; time: string } {
   const now = new Date();
   const date = now.toLocaleDateString("en-CA", { timeZone: TZ });
-  const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  const { hours, minutes } = getCurrentTimeInLocalTZ();
+  const time = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
   return { date, time };
 }
 
@@ -65,8 +66,8 @@ function getCurrentSeatedReservation(
   tableId: string,
   reservations: Reservation[]
 ): Reservation | null {
-  const now = new Date();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const { hours, minutes } = getCurrentTimeInLocalTZ();
+  const nowMinutes = hours * 60 + minutes;
   
   return reservations
     .filter((r) => {
@@ -96,12 +97,6 @@ function isSmallTable(table: Table): boolean {
   return SMALL_TABLES.includes(String(table.number)) || table.capacity === SMALL_CAPACITY;
 }
 
-function formatDateForDisplay(dateStr: string): string {
-  if (!dateStr) return "—";
-  const [year, month, day] = dateStr.split("-");
-  return `${day}.${month}.${year}`;
-}
-
 interface TimelineSlot {
   hour: number;
   label: string;
@@ -114,8 +109,8 @@ const OPEN_HOUR = 12;
 const CLOSE_HOUR = 26;
 
 function buildTimeline(reservations: Reservation[]): TimelineSlot[] {
-  const now = new Date();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const { hours, minutes } = getCurrentTimeInLocalTZ();
+  const nowMinutes = hours * 60 + minutes;
   const slots: TimelineSlot[] = [];
 
   for (let h = OPEN_HOUR; h < CLOSE_HOUR; h++) {
@@ -220,7 +215,7 @@ export default function TableManagementModal({
       return;
     }
     if (!date || !time) {
-      toast.error("Пожалуйста, выберите время в таймлайне", { position: "top-center" });
+      toast.error("Укажите дату и время", { position: "top-center" });
       return;
     }
     if (!name.trim()) {
@@ -514,19 +509,26 @@ export default function TableManagementModal({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-[#98989D] text-xs">Дата</label>
-                <div className="h-11 bg-[#2C2C2E] border border-[#3A3A3C] rounded-xl px-4 flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-[#636366]" />
-                  <span className="text-white font-medium">{formatDateForDisplay(date)}</span>
+                <div className="relative">
+                  <input
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    className="w-full h-11 bg-[#2C2C2E] border border-[#3A3A3C] rounded-xl text-white px-4 text-sm outline-none focus:border-[#9ffb00] transition-all box-border appearance-none"
+                  />
                 </div>
-                <p className="text-[10px] text-[#636366] mt-1">Выберите в таймлайне</p>
               </div>
               <div className="space-y-1">
                 <label className="text-[#98989D] text-xs">Время</label>
-                <div className="h-11 bg-[#2C2C2E] border border-[#3A3A3C] rounded-xl px-4 flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-[#636366]" />
-                  <span className="text-white font-mono font-medium">{time || "--:--"}</span>
+                <div className="relative">
+                  <input
+                    type="time"
+                    value={time}
+                    onChange={(e) => setTime(e.target.value)}
+                    step="900"
+                    className="w-full h-11 bg-[#2C2C2E] border border-[#3A3A3C] rounded-xl text-white px-4 text-sm outline-none focus:border-[#9ffb00] transition-all box-border appearance-none"
+                  />
                 </div>
-                <p className="text-[10px] text-[#636366] mt-1">Выберите в таймлайне</p>
               </div>
             </div>
 

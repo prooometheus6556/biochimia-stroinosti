@@ -146,14 +146,7 @@ export async function freeTable(reservationId: string): Promise<{ success: boole
 }
 
 function toLocalISOStringWithOffset(dateStr: string, timeStr: string): string {
-  const NOVOSIBIRSK_OFFSET_HOURS = 7;
-  const [hours, minutes] = timeStr.split(':').map(Number);
-  const [year, month, day] = dateStr.split('-').map(Number);
-  const localDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
-  const utcTimestamp = localDate.getTime() - (NOVOSIBIRSK_OFFSET_HOURS * 3600000);
-  const utcDate = new Date(utcTimestamp);
-  const iso = utcDate.toISOString();
-  return iso.replace('Z', '+07:00');
+  return `${dateStr}T${timeStr}:00+07:00`;
 }
 
 async function sendAdminTelegramNotification(params: {
