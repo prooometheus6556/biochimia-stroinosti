@@ -297,6 +297,7 @@ TELEGRAM_CHAT_ID=333906877
 | 22 | Фикс: удалён phantom "11.5" из TABLE_NUMBERS; table 13 → capacity=6 | ✅ |
 | 23 | Откат и правильный фикс: стол 11.5 возвращён, добавлен DISPLAY_NUMBER_MAP (Path A + Path B SQL) | ✅ |
 | 24 | Graphite theme redesign + AdminClient с вкладками + TableManagementModal | ✅ |
+| 25 | Фикс timezone handling: lib/datetime.ts + исправления в UpcomingBookings, Chessboard, TableManagementModal | ✅ |
 
 ### 📋 Бэклог
 
@@ -312,7 +313,7 @@ TELEGRAM_CHAT_ID=333906877
 
 | Окружение | URL | Примечание |
 |-----------|-----|------------|
-| Production | https://project-elka-lounge.vercel.app | Последний: FFgy4U1zeigbtxqwHw4NnxKrajsv |
+| Production | https://project-elka-lounge.vercel.app | Последний: 9tmCTnmRQzYC1teYugda8hbEVfWq |
 | Preview | vercel.app/*/project-elka-lounge | Перед merge |
 
 **⚠️ ВАЖНО: После каждой итерации обязательно запускать `npx vercel --prod` для деплоя в production!**
@@ -339,3 +340,15 @@ TELEGRAM_CHAT_ID=333906877
 ---
 
 *Последнее обновление: 9 апреля 2026*
+
+---
+
+## Архитектура утилит
+
+### lib/datetime.ts
+Централизованные утилиты для работы с часовым поясом UTC+7 (Новосибирск):
+- `NOVOSIBIRSK_TZ` — константа часового пояса
+- `formatTimeLocal(isoString)` — форматирование времени с учётом часового пояса
+- `parseToLocalDateTime(isoString)` — парсинг ISO-строки в Date
+- `getLocalNow()` — текущее время в UTC+7
+- `getHoursDiff(arrivalTimeISO)` — разница в часах между now и arrival_time
