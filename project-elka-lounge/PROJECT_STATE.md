@@ -299,6 +299,7 @@ TELEGRAM_CHAT_ID=333906877
 | 24 | Graphite theme redesign + AdminClient с вкладками + TableManagementModal | ✅ |
 | 25 | Фикс timezone handling: lib/datetime.ts + исправления в UpcomingBookings, Chessboard, TableManagementModal | ✅ |
 | 26 | Система No-Show и Early Leave: updateReservationStatus с endEarly, кнопки отмены/освобождения | ✅ |
+| 27 | Фикс timezone, редизайн date/time, защита вместимости для малых столов | ✅ |
 
 ### 📋 Бэклог
 
@@ -314,7 +315,7 @@ TELEGRAM_CHAT_ID=333906877
 
 | Окружение | URL | Примечание |
 |-----------|-----|------------|
-| Production | https://project-elka-lounge.vercel.app | Последний: 3MDvQw1aq4mCJxNpmQpgFAAVNqFN |
+| Production | https://project-elka-lounge.vercel.app | Последний: J6iqLhtdV7t853ytqmMvN2Xh5iMz |
 | Preview | vercel.app/*/project-elka-lounge | Перед merge |
 
 **⚠️ ВАЖНО: После каждой итерации обязательно запускать `npx vercel --prod` для деплоя в production!**
