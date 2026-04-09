@@ -22,20 +22,23 @@ function getAvailableTablesClient(reservations: Reservation[], tables: Table[]):
 
   const seatedTableIds = new Set(
     reservations
-      .filter(r => r.status === "seated")
+      .filter(r => r.status === "seated" && r.table_id)
       .map(r => r.table_id)
-      .filter(Boolean)
   );
 
-  const activeByTable: Record<string, Reservation> = {};
+  const occupiedByUpcoming: Set<string> = new Set();
   for (const res of reservations) {
-    if (res.status === "seated" || res.status === "confirmed" || res.status === "waitlist") {
-      const arrivalMins = getMinutesFromMidnightLocalTZ(res.arrival_time);
-      if (arrivalMins === null) continue;
-      const endMins = arrivalMins + res.expected_duration_minutes;
-      if (arrivalMins <= nowMinutes && endMins > nowMinutes) {
-        activeByTable[res.table_id ?? ""] = res;
-      }
+    if (!res.table_id) continue;
+    if (res.status === "cancelled" || res.status === "completed") continue;
+    
+    if (res.status === "seated") continue;
+    
+    const arrivalMins = getMinutesFromMidnightLocalTZ(res.arrival_time);
+    if (arrivalMins === null) continue;
+    const endMins = arrivalMins + res.expected_duration_minutes;
+    
+    if (arrivalMins <= nowMinutes && endMins > nowMinutes) {
+      occupiedByUpcoming.add(res.table_id);
     }
   }
 
@@ -43,10 +46,10 @@ function getAvailableTablesClient(reservations: Reservation[], tables: Table[]):
   for (const table of tables) {
     if (!table.is_active) continue;
     if (seatedTableIds.has(table.id)) continue;
-    if (activeByTable[table.id]) continue;
+    if (occupiedByUpcoming.has(table.id)) continue;
 
     const todayRes = reservations
-      .filter(r => r.table_id === table.id && r.status !== "cancelled" && r.status !== "completed")
+      .filter(r => r.table_id === table.id && r.status !== "cancelled" && r.status !== "completed" && r.status !== "seated")
       .sort((a, b) => new Date(a.arrival_time).getTime() - new Date(b.arrival_time).getTime());
 
     const nextRes = todayRes.find(r => {
