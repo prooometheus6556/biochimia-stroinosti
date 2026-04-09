@@ -519,7 +519,10 @@ export async function createWalkIn(params: {
     }
 
     const now = new Date();
-    const arrivalTime = now.toISOString();
+    const localDateStr = now.toLocaleDateString("en-CA", { timeZone: "Asia/Novosibirsk" });
+    const hours = now.toLocaleTimeString("ru-RU", { timeZone: "Asia/Novosibirsk", hour: "2-digit", hour12: false });
+    const minutes = now.toLocaleTimeString("ru-RU", { timeZone: "Asia/Novosibirsk", minute: "2-digit", hour12: false });
+    const arrivalTime = `${localDateStr}T${hours}:${minutes}:00+07:00`;
     const safePhone = guestPhone?.trim() || `WI-${Date.now().toString().slice(-8)}`;
 
     let guestId: string;
