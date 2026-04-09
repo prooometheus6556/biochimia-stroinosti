@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { X, AlertTriangle, Plus, Minus } from "lucide-react";
 import { createAdminReservation, updateReservationStatus } from "@/app/actions/admin";
-import { formatTimeLocal, formatDateLocal, getCurrentTimeInLocalTZ } from "@/lib/datetime";
+import { formatTimeLocal, formatDateLocal } from "@/lib/datetime";
 import { toast } from "sonner";
 import { Table, Reservation } from "@/app/actions/admin";
 
@@ -32,12 +32,8 @@ function getLocalHoursMinutes(isoString: string | null | undefined): { hours: nu
   }
 }
 
-function getDayStartLocal(): { date: string; time: string } {
-  const now = new Date();
-  const date = now.toLocaleDateString("en-CA", { timeZone: TZ });
-  const { hours, minutes } = getCurrentTimeInLocalTZ();
-  const time = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
-  return { date, time };
+function getTodayLocalDate(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: TZ });
 }
 
 function getTableReservationsForDay(
@@ -78,10 +74,8 @@ export default function TableManagementModal({
   reservations,
   initialTableId,
 }: TableManagementModalProps) {
-  const todayDefaults = useMemo(() => getDayStartLocal(), []);
-
   const [selectedTableId, setSelectedTableId] = useState<string>(initialTableId);
-  const [date, setDate] = useState(todayDefaults.date);
+  const [date, setDate] = useState(getTodayLocalDate);
   const [showForm, setShowForm] = useState(false);
   
   const [name, setName] = useState("");
@@ -115,11 +109,11 @@ export default function TableManagementModal({
   useEffect(() => {
     if (isOpen) {
       setSelectedTableId(initialTableId);
-      setDate(todayDefaults.date);
+      setDate(getTodayLocalDate());
       setShowForm(false);
       resetForm();
     }
-  }, [isOpen, initialTableId, todayDefaults, resetForm]);
+  }, [isOpen, initialTableId, resetForm]);
 
   const handleSeatGuest = async (reservationId: string) => {
     setProcessingId(reservationId);
@@ -232,7 +226,6 @@ export default function TableManagementModal({
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-[#1C1C1E] border border-white/10 rounded-2xl p-5 w-full max-w-md shadow-2xl max-h-[92vh] flex flex-col overflow-hidden">
 
-        {/* Закрыть — только в углу, не внизу */}
         <button
           onClick={onClose}
           className="absolute top-4 right-4 text-[#98989D] hover:text-white transition-colors z-10"
@@ -240,7 +233,6 @@ export default function TableManagementModal({
           <X className="w-5 h-5" />
         </button>
 
-        {/* Заголовок */}
         <div className="flex items-center justify-between mb-4 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-[#9ffb00]/20 rounded-full flex items-center justify-center">
@@ -264,18 +256,15 @@ export default function TableManagementModal({
           </span>
         </div>
 
-        {/* Timeline-лента */}
         <div className="flex-1 overflow-y-auto min-h-0 pr-1 mr-1">
-          <div className="flex flex-col gap-2 w-full">
+          <div className="flex flex-col gap-3 w-full">
 
-            {/* Пусто */}
             {tableReservations.length === 0 && !showForm && (
               <div className="text-center py-6 text-[#636366] text-sm">
                 Нет броней на сегодня
               </div>
             )}
 
-            {/* Карточки */}
             {tableReservations.map((res) => {
               const isBlocked = isBlockReservation(res);
               const startTime = formatTimeLocal(res.arrival_time);
@@ -286,31 +275,28 @@ export default function TableManagementModal({
               return (
                 <div
                   key={res.id}
-                  className={`flex flex-row items-center justify-between bg-[#1A1D21] border border-[#2A2D32] p-3 rounded-xl ${
+                  className={`flex flex-row items-center justify-between bg-[#1A1D21] border border-[#2A2D32] p-4 rounded-xl w-full ${
                     isBlocked ? "border-orange-500/30" : res.status === "seated" ? "border-green-500/30" : ""
                   }`}
                 >
-                  {/* Левая часть: Время */}
-                  <div className="flex flex-col min-w-[60px]">
-                    <span className={`text-white font-bold text-base leading-tight ${isBlocked ? "text-orange-400" : ""}`}>
+                  <div className="flex flex-col min-w-[80px]">
+                    <span className={`text-white font-bold text-lg ${isBlocked ? "text-orange-400" : ""}`}>
                       {startTime}
                     </span>
-                    <span className="text-[#636366] text-[10px]">{durText}</span>
+                    <span className="text-gray-400 text-sm">{durText}</span>
                   </div>
 
-                  {/* Центр: Гость */}
-                  <div className="flex flex-col flex-1 border-l border-[#2A2D32] ml-2 pl-2 text-left">
-                    <span className={`text-sm font-medium ${isBlocked ? "text-orange-400" : "text-white"}`}>
+                  <div className="flex flex-col flex-1 border-l border-[#2A2D32] ml-4 pl-4 text-left">
+                    <span className={`text-white font-medium ${isBlocked ? "text-orange-400" : ""}`}>
                       {res.guest?.name || "Гость"}
                     </span>
-                    <span className="text-[#636366] text-[10px]">
-                      {res.guest?.phone || "—"}
+                    <span className="text-gray-400 text-sm">
+                      👤 {res.guest_count || 1} | 📞 {res.guests?.phone || "Нет номера"}
                     </span>
                   </div>
 
-                  {/* Правая часть: Кнопки */}
-                  <div className="flex flex-col items-end gap-1.5 ml-2">
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                  <div className="flex flex-col items-end gap-2 min-w-[140px]">
+                    <span className={`text-xs px-2 py-1 rounded-md ${
                       res.status === "seated"
                         ? "bg-green-500/20 text-green-400"
                         : isBlocked
@@ -319,50 +305,49 @@ export default function TableManagementModal({
                     }`}>
                       {res.status === "seated" ? "За столом" : isBlocked ? "Блок" : "Ожидает"}
                     </span>
-
-                    {isProcessing ? (
-                      <span className="w-4 h-4 border border-current border-t-transparent rounded-full animate-spin" />
-                    ) : res.status === "seated" ? (
-                      /* Seated: Завершить + Закрыть inline */
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => handleCompleteReservation(res.id)}
-                          className="bg-[#9ffb00] text-black px-2 py-1 rounded-lg text-[10px] font-bold hover:bg-[#8bdc00] transition"
-                        >
-                          Завершить
-                        </button>
-                        <button
-                          onClick={onClose}
-                          className="bg-[#2A2D32] text-white px-2 py-1 rounded-lg text-[10px] font-medium hover:bg-[#3A3A3C] transition"
-                        >
-                          Закрыть
-                        </button>
-                      </div>
-                    ) : (
-                      /* Не seated: Посадить + Отмена */
-                      <div className="flex gap-1">
-                        {!isBlocked && (
+                    
+                    <div className="flex gap-2 w-full">
+                      {isProcessing ? (
+                        <span className="w-4 h-4 border border-current border-t-transparent rounded-full animate-spin" />
+                      ) : res.status === "seated" ? (
+                        <>
                           <button
-                            onClick={() => handleSeatGuest(res.id)}
-                            className="bg-[#9ffb00] text-black px-2 py-1 rounded-lg text-[10px] font-bold hover:bg-[#8bdc00] transition"
+                            onClick={() => handleCompleteReservation(res.id)}
+                            className="bg-[#9ffb00] text-black px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-[#8bdc00] transition flex-1"
                           >
-                            Посадить
+                            Завершить
                           </button>
-                        )}
-                        <button
-                          onClick={() => handleCancelReservation(res.id)}
-                          className="bg-[#2A2D32] text-white px-2 py-1 rounded-lg text-[10px] hover:bg-red-500/20 hover:text-red-400 transition"
-                        >
-                          Отмена
-                        </button>
-                      </div>
-                    )}
+                          <button
+                            onClick={onClose}
+                            className="bg-[#2A2D32] text-white px-3 py-1.5 rounded-lg text-sm hover:bg-[#3A3D42] transition"
+                          >
+                            Закрыть
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          {!isBlocked && (
+                            <button
+                              onClick={() => handleSeatGuest(res.id)}
+                              className="bg-[#9ffb00] text-black px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-[#8bdc00] transition flex-1"
+                            >
+                              Посадить
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleCancelReservation(res.id)}
+                            className="bg-[#2A2D32] text-white px-3 py-1.5 rounded-lg text-sm hover:bg-red-500/20 hover:text-red-500 transition"
+                          >
+                            Отмена
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
             })}
 
-            {/* Форма создания */}
             {showForm && (
               <div className="bg-[#2C2C2E] rounded-xl p-3 space-y-2 border border-[#9ffb00]/30">
                 <div className="flex gap-1">
@@ -459,7 +444,6 @@ export default function TableManagementModal({
           </div>
         </div>
 
-        {/* Dotted кнопка внизу — ВСЕГДА видна */}
         {!showForm && (
           <button
             onClick={() => setShowForm(true)}
