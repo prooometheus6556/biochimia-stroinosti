@@ -614,3 +614,25 @@ export async function createWalkIn(params: {
     return { success: false, message: `Ошибка: ${errorMessage}` };
   }
 }
+
+export async function truncateAllReservations(): Promise<{ success: boolean; message: string; deletedCount: number }> {
+  if (!supabaseUrl || !supabaseServiceKey) {
+    return { success: false, message: "Missing environment variables", deletedCount: 0 };
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+  const { count, error } = await supabase
+    .from("reservations")
+    .delete()
+    .neq("id", "00000000-0000-0000-0000-000000000000");
+
+  if (error) {
+    return { success: false, message: error.message, deletedCount: 0 };
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/", "layout");
+
+  return { success: true, message: "Все брони удалены", deletedCount: count ?? 0 };
+}
