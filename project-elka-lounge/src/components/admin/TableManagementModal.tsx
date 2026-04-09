@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { X, AlertTriangle, Check, Plus, Minus, CheckCircle2, XCircle, LogOut } from "lucide-react";
+import { X, AlertTriangle, Check, Plus, Minus, CheckCircle2, XCircle, LogOut, Calendar, Clock } from "lucide-react";
 import { createAdminReservation, updateReservationStatus } from "@/app/actions/admin";
 import { toDisplayNumber } from "@/lib/tableDisplay";
 import { formatTimeLocal } from "@/lib/datetime";
@@ -89,6 +89,19 @@ function isBlockReservation(r: Reservation): boolean {
   return (r.guest?.name ?? "").toUpperCase().startsWith("БЛОК:");
 }
 
+const SMALL_TABLES = ["2", "11", "11.5"];
+const SMALL_CAPACITY = 2;
+
+function isSmallTable(table: Table): boolean {
+  return SMALL_TABLES.includes(String(table.number)) || table.capacity === SMALL_CAPACITY;
+}
+
+function formatDateForDisplay(dateStr: string): string {
+  if (!dateStr) return "—";
+  const [year, month, day] = dateStr.split("-");
+  return `${day}.${month}.${year}`;
+}
+
 interface TimelineSlot {
   hour: number;
   label: string;
@@ -158,6 +171,15 @@ export default function TableManagementModal({
 
   const initialTable = tables.find((t) => t.id === initialTableId);
 
+  const isAnySmallTableSelected = useMemo(() => {
+    return selectedTableIds.some((id) => {
+      const table = tables.find((t) => t.id === id);
+      return table && isSmallTable(table);
+    });
+  }, [selectedTableIds, tables]);
+
+  const maxGuests = isAnySmallTableSelected ? SMALL_CAPACITY : 20;
+
   const targetDate = date;
 
   const tableReservations = useMemo(() => {
@@ -178,11 +200,12 @@ export default function TableManagementModal({
       setTime(todayDefaults.time);
       setName("");
       setPhone("");
-      setGuests(6);
+      const table = tables.find((t) => t.id === initialTableId);
+      setGuests(table && isSmallTable(table) ? 2 : 6);
       setDurationHours(3);
       setIsBlock(false);
     }
-  }, [isOpen, initialTableId, todayDefaults]);
+  }, [isOpen, initialTableId, todayDefaults, tables]);
 
   const toggleTable = (tableId: string) => {
     setSelectedTableIds((prev) =>
@@ -202,6 +225,10 @@ export default function TableManagementModal({
     }
     if (!name.trim()) {
       toast.error("Введите имя гостя", { position: "top-center" });
+      return;
+    }
+    if (isAnySmallTableSelected && guests > SMALL_CAPACITY) {
+      toast.error(`Малый стол: максимум ${SMALL_CAPACITY} гостя`, { position: "top-center" });
       return;
     }
 
@@ -233,7 +260,7 @@ export default function TableManagementModal({
     } else {
       toast.error(result.message, { position: "top-center", duration: 5000 });
     }
-  }, [isSubmitting, selectedTableIds, name, phone, date, time, guests, durationHours, isBlock, onSuccess, onClose]);
+  }, [isSubmitting, selectedTableIds, name, phone, date, time, guests, durationHours, isBlock, isAnySmallTableSelected, onSuccess, onClose]);
 
   const handleGuestLeft = useCallback(async () => {
     if (!initialTableId) return;
@@ -487,43 +514,50 @@ export default function TableManagementModal({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-[#98989D] text-xs">Дата</label>
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="w-full h-11 bg-[#2C2C2E] border border-[#3A3A3C] rounded-xl text-white px-4 text-sm outline-none focus:border-[#9ffb00] transition-all box-border appearance-none"
-                />
+                <div className="h-11 bg-[#2C2C2E] border border-[#3A3A3C] rounded-xl px-4 flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-[#636366]" />
+                  <span className="text-white font-medium">{formatDateForDisplay(date)}</span>
+                </div>
+                <p className="text-[10px] text-[#636366] mt-1">Выберите в таймлайне</p>
               </div>
               <div className="space-y-1">
                 <label className="text-[#98989D] text-xs">Время</label>
-                <input
-                  type="time"
-                  value={time}
-                  onChange={(e) => setTime(e.target.value)}
-                  step="900"
-                  className="w-full h-11 bg-[#2C2C2E] border border-[#3A3A3C] rounded-xl text-white px-4 text-sm outline-none focus:border-[#9ffb00] transition-all box-border appearance-none"
-                />
+                <div className="h-11 bg-[#2C2C2E] border border-[#3A3A3C] rounded-xl px-4 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-[#636366]" />
+                  <span className="text-white font-mono font-medium">{time || "--:--"}</span>
+                </div>
+                <p className="text-[10px] text-[#636366] mt-1">Выберите в таймлайне</p>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="text-[#98989D] text-xs">Гостей</label>
+                <label className="text-[#98989D] text-xs">
+                  Гостей
+                  {isAnySmallTableSelected && (
+                    <span className="text-orange-400 ml-1">(малый стол)</span>
+                  )}
+                </label>
                 <div className="flex items-center bg-[#2C2C2E] border border-[#3A3A3C] rounded-xl h-11">
                   <button
                     onClick={() => setGuests((g) => Math.max(1, g - 1))}
-                    className="px-3 text-[#98989D] hover:text-white transition-colors"
+                    disabled={guests <= 1}
+                    className="px-3 text-[#98989D] hover:text-white transition-colors disabled:opacity-30"
                   >
                     <Minus className="w-4 h-4" />
                   </button>
                   <span className="flex-1 text-center text-white font-medium">{guests}</span>
                   <button
-                    onClick={() => setGuests((g) => Math.min(20, g + 1))}
-                    className="px-3 text-[#98989D] hover:text-white transition-colors"
+                    onClick={() => setGuests((g) => Math.min(maxGuests, g + 1))}
+                    disabled={guests >= maxGuests}
+                    className="px-3 text-[#98989D] hover:text-white transition-colors disabled:opacity-30"
                   >
                     <Plus className="w-4 h-4" />
                   </button>
                 </div>
+                {isAnySmallTableSelected && (
+                  <p className="text-[10px] text-orange-400 mt-1">Максимум {maxGuests} гостя</p>
+                )}
               </div>
               <div className="space-y-1">
                 <label className="text-[#98989D] text-xs">Длительность</label>
@@ -545,10 +579,14 @@ export default function TableManagementModal({
             <div className="space-y-2">
               <label className="text-[#98989D] text-xs">
                 Столы ({selectedTableIds.length} выбрано)
+                {isAnySmallTableSelected && (
+                  <span className="text-orange-400 ml-1">(до 2 гостей)</span>
+                )}
               </label>
               <div className="grid grid-cols-5 gap-2">
                 {tables.map((table) => {
                   const isSelected = selectedTableIds.includes(table.id);
+                  const isSmall = isSmallTable(table);
                   return (
                     <button
                       key={table.id}
@@ -558,6 +596,8 @@ export default function TableManagementModal({
                         relative py-2 px-1 rounded-xl border-2 text-center text-sm font-bold transition-all
                         ${isSelected
                           ? "border-[#9ffb00] bg-[#9ffb00]/20 text-[#9ffb00]"
+                          : isSmall
+                          ? "border-orange-500/30 bg-[#2C2C2E] text-orange-400/70 hover:border-orange-500/50"
                           : "border-[#3A3A3C] bg-[#2C2C2E] text-[#98989D] hover:border-[#4A4A4C]"
                         }
                       `}
