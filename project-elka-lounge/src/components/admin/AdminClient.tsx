@@ -5,9 +5,10 @@ import Chessboard from "@/components/admin/Chessboard";
 import UpcomingBookings from "@/components/admin/UpcomingBookings";
 import StopList from "@/components/admin/StopList";
 import RealtimeListener from "@/components/admin/RealtimeListener";
-import { Table, Reservation, freeTable } from "@/app/actions/admin";
+import WalkInModal from "@/components/admin/WalkInModal";
+import { Table, Reservation } from "@/app/actions/admin";
 import { MenuItem } from "@/app/actions/menu";
-import { Calendar, UtensilsCrossed } from "lucide-react";
+import { Calendar, UtensilsCrossed, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 interface AdminClientProps {
@@ -25,6 +26,7 @@ interface RealtimePayload {
 export default function AdminClient({ tables, reservations, menuItems }: AdminClientProps) {
   const [activeTab, setActiveTab] = useState<"booking" | "stoplist">("booking");
   const [localReservations, setLocalReservations] = useState(reservations);
+  const [walkInModalOpen, setWalkInModalOpen] = useState(false);
   const router = useRouter();
 
   const handleRealtimeUpdate = useCallback((payload: RealtimePayload) => {
@@ -46,17 +48,6 @@ export default function AdminClient({ tables, reservations, menuItems }: AdminCl
     }
   }, [localReservations]);
 
-  const handleFreeTable = useCallback(async (reservationId: string) => {
-    console.log('[ADMIN] Optimistic update: freeing table', reservationId);
-    
-    setLocalReservations(prev => 
-      prev.filter(r => r.id !== reservationId)
-    );
-    
-    await freeTable(reservationId);
-    router.refresh();
-  }, [router]);
-
   const tabs = [
     { id: "booking" as const, label: "Бронирование", icon: Calendar },
     { id: "stoplist" as const, label: "Стоп-лист", icon: UtensilsCrossed },
@@ -65,8 +56,16 @@ export default function AdminClient({ tables, reservations, menuItems }: AdminCl
   return (
     <>
       <RealtimeListener onRealtimeUpdate={handleRealtimeUpdate} />
-      
-      <div className="mb-6">
+
+      <div className="flex items-center gap-3 mb-6">
+        <button
+          onClick={() => setWalkInModalOpen(true)}
+          className="flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm bg-[#9ffb00] text-black hover:bg-[#8BDC00] transition-all shadow-lg shadow-[#9ffb00]/20"
+        >
+          <Zap className="w-4 h-4" />
+          Быстрая посадка
+        </button>
+
         <div className="flex gap-2 p-1.5 bg-[#2C2C2E] rounded-2xl inline-flex">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -102,7 +101,6 @@ export default function AdminClient({ tables, reservations, menuItems }: AdminCl
             <Chessboard 
               tables={tables} 
               reservations={localReservations}
-              onFreeTable={handleFreeTable}
               onReservationCreated={() => router.refresh()}
             />
           </div>
@@ -126,6 +124,14 @@ export default function AdminClient({ tables, reservations, menuItems }: AdminCl
           <StopList items={menuItems} />
         </div>
       )}
+
+      <WalkInModal
+        isOpen={walkInModalOpen}
+        onClose={() => setWalkInModalOpen(false)}
+        onSuccess={() => router.refresh()}
+        tables={tables}
+        reservations={localReservations}
+      />
     </>
   );
 }

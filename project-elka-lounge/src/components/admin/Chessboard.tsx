@@ -1,16 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Building2, Gamepad2, Clock, Users, Phone, X, Check } from "lucide-react";
+import { Building2, Gamepad2 } from "lucide-react";
 import { Table, Reservation } from "@/app/actions/admin";
 import TableManagementModal from "./TableManagementModal";
-import { toDisplayNumber, DISPLAY_TO_DB_NUMBER } from "@/lib/tableDisplay";
-import { formatTimeLocal } from "@/lib/datetime";
+import { DISPLAY_TO_DB_NUMBER } from "@/lib/tableDisplay";
 
 interface ChessboardProps {
   tables: Table[];
   reservations: Reservation[];
-  onFreeTable?: (reservationId: string) => void;
   onSeatGuest?: (reservationId: string, tableId: string) => void;
   onReservationCreated?: () => void;
 }
@@ -49,22 +47,12 @@ const ControllerPattern = () => (
   </svg>
 );
 
-const formatTime = (dateString: string | null | undefined) => {
-  return formatTimeLocal(dateString);
-};
-
 export default function Chessboard({
   tables,
   reservations,
-  onFreeTable,
   onReservationCreated,
 }: ChessboardProps) {
-  const [selectedTable, setSelectedTable] = useState<{
-    table: Table;
-    reservation: Reservation;
-  } | null>(null);
   const [managingTableId, setManagingTableId] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
 
   const activeReservations = reservations.filter(
     (r) => r.status === "waitlist" || r.status === "confirmed" || r.status === "seated"
@@ -75,31 +63,22 @@ export default function Chessboard({
     const table = tables.find((t) => t.number === dbNumber);
     if (table) tableByNumber.set(displayName, table);
   }
-  const reservationByTableId = new Map(
-    activeReservations
-      .filter((r) => r.table_id)
+  const seatedByTableId = new Map(
+    reservations
+      .filter((r) => r.status === "seated" && r.table_id)
       .map((r) => [String(r.table_id), r])
   );
-
-  const handleFreeTable = async () => {
-    if (!selectedTable || !onFreeTable) return;
-    const reservationId = selectedTable.reservation.id;
-    setIsProcessing(true);
-    setSelectedTable(null);
-    try {
-      await onFreeTable(reservationId);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
 
   return (
     <>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
         {TABLE_NUMBERS.map((tableNumber) => {
           const dbTable = tableByNumber.get(tableNumber);
-          const reservation = dbTable ? reservationByTableId.get(String(dbTable.id)) : null;
-          const isOccupied = !!reservation;
+          const reservation = dbTable 
+            ? activeReservations.find(r => r.table_id === dbTable.id)
+            : null;
+          const seatedReservation = dbTable ? seatedByTableId.get(String(dbTable.id)) : null;
+          const isOccupied = !!seatedReservation;
           const isBlocked = !!reservation && isBlockReservation(reservation);
           const zone = getZoneFromNumber(tableNumber);
 
@@ -107,18 +86,13 @@ export default function Chessboard({
             <button
               key={tableNumber}
               onClick={() => {
-                if (!dbTable) return;
-                if (reservation) {
-                  setSelectedTable({ table: dbTable, reservation });
-                } else {
+                if (dbTable) {
                   setManagingTableId(dbTable.id);
                 }
               }}
-              disabled={isProcessing}
               className={`
                 relative w-full aspect-square rounded-3xl border 
                 flex flex-col justify-between p-6 transition-all duration-200
-                ${isProcessing ? "opacity-70" : ""}
                 ${isOccupied
                   ? isBlocked
                     ? "bg-[#2C2C2E] border-orange-400/60 hover:border-orange-400 cursor-pointer hover:scale-[1.02]"
@@ -166,117 +140,11 @@ export default function Chessboard({
         })}
       </div>
 
-      {selectedTable && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-            onClick={() => setSelectedTable(null)}
-          />
-          <div className="relative bg-[#1C1C1E] border border-white/10 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-            <button
-              onClick={() => setSelectedTable(null)}
-              className="absolute top-4 right-4 text-[#98989D] hover:text-white transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-[#9ffb00]/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                <span className="text-3xl font-black text-[#9ffb00]">{toDisplayNumber(selectedTable.table.number)}</span>
-              </div>
-              <h3 className="text-2xl font-bold text-white">Стол {toDisplayNumber(selectedTable.table.number)}</h3>
-              <div className="flex items-center justify-center gap-2 mt-2">
-                {isBlockReservation(selectedTable.reservation) ? (
-                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-orange-500/20 text-orange-400">
-                    Блок
-                  </span>
-                ) : null}
-                <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-medium ${
-                  selectedTable.reservation.status === "seated"
-                    ? "bg-orange-500/20 text-orange-400"
-                    : selectedTable.reservation.status === "waitlist"
-                    ? "bg-green-500/20 text-green-400"
-                    : "bg-blue-500/20 text-blue-400"
-                }`}>
-                  {selectedTable.reservation.status === "seated" ? "За столом" :
-                   selectedTable.reservation.status === "waitlist" ? "В ожидании" :
-                   "Подтверждено"}
-                </span>
-              </div>
-            </div>
-
-            <div className="space-y-4 mb-6">
-              <div className="flex items-center gap-3 p-3 bg-[#2C2C2E] rounded-xl">
-                <div className="w-10 h-10 bg-[#9ffb00]/20 rounded-full flex items-center justify-center">
-                  <span className="text-lg">👤</span>
-                </div>
-                <div>
-                  <p className="text-[#98989D] text-xs">Гость</p>
-                  <p className={`font-semibold ${isBlockReservation(selectedTable.reservation) ? "text-orange-400" : "text-white"}`}>
-                    {selectedTable.reservation.guest?.name || "Неизвестно"}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 p-3 bg-[#2C2C2E] rounded-xl">
-                <div className="w-10 h-10 bg-[#9ffb00]/20 rounded-full flex items-center justify-center">
-                  <Clock className="w-5 h-5 text-[#9ffb00]" />
-                </div>
-                <div>
-                  <p className="text-[#98989D] text-xs">Время</p>
-                  <p className="text-white font-semibold">{formatTime(selectedTable.reservation.arrival_time)}</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 p-3 bg-[#2C2C2E] rounded-xl">
-                <div className="w-10 h-10 bg-[#9ffb00]/20 rounded-full flex items-center justify-center">
-                  <Users className="w-5 h-5 text-[#9ffb00]" />
-                </div>
-                <div>
-                  <p className="text-[#98989D] text-xs">Длительность</p>
-                  <p className="text-white font-semibold">
-                    {Math.floor(selectedTable.reservation.expected_duration_minutes / 60)} ч
-                  </p>
-                </div>
-              </div>
-
-              {selectedTable.reservation.guest?.phone && (
-                <div className="flex items-center gap-3 p-3 bg-[#2C2C2E] rounded-xl">
-                  <div className="w-10 h-10 bg-[#9ffb00]/20 rounded-full flex items-center justify-center">
-                    <Phone className="w-5 h-5 text-[#9ffb00]" />
-                  </div>
-                  <div>
-                    <p className="text-[#98989D] text-xs">Телефон</p>
-                    <p className="text-white font-semibold">{selectedTable.reservation.guest.phone}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={handleFreeTable}
-                disabled={isProcessing}
-                className="flex-1 py-3 px-4 bg-[#9ffb00] hover:bg-[#8bdc00] text-black font-bold rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                <Check className="w-5 h-5" />
-                {isProcessing ? "Освобождаю..." : "Завершить"}
-              </button>
-              <button
-                onClick={() => setSelectedTable(null)}
-                className="py-3 px-4 bg-[#3A3A3C] hover:bg-[#4A4A4C] text-white rounded-xl transition-all"
-              >
-                Закрыть
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       <TableManagementModal
         isOpen={!!managingTableId}
         onClose={() => setManagingTableId(null)}
         onSuccess={() => {
+          setManagingTableId(null);
           if (onReservationCreated) onReservationCreated();
         }}
         tables={tables}
