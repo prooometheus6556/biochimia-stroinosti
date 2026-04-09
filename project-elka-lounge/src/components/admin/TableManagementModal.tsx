@@ -291,7 +291,7 @@ export default function TableManagementModal({
                       {res.guest?.name || "Гость"}
                     </span>
                     <span className="text-gray-400 text-sm">
-                      👤 {res.guest_count || 1} | 📞 {res.guests?.phone || "Нет номера"}
+                      📞 {res.guest?.phone || "Нет номера"}
                     </span>
                   </div>
 
