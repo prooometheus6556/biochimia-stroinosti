@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { X, AlertTriangle, Check, Plus, Minus, CheckCircle2, XCircle, LogOut } from "lucide-react";
+import { X, AlertTriangle, Check, Plus, Minus, CheckCircle2, XCircle, LogOut, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { createAdminReservation, updateReservationStatus } from "@/app/actions/admin";
 import { toDisplayNumber } from "@/lib/tableDisplay";
 import { formatTimeLocal, getCurrentTimeInLocalTZ } from "@/lib/datetime";
@@ -506,31 +506,11 @@ export default function TableManagementModal({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-[#98989D] text-xs">Дата</label>
-                <div className="relative">
-                  <input
-                    type="date"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="w-full h-11 bg-[#2C2C2E] border border-[#3A3A3C] rounded-xl text-white px-4 text-sm outline-none focus:border-[#9ffb00] transition-all box-border appearance-none"
-                  />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[#98989D] text-xs">Время</label>
-                <div className="relative">
-                  <input
-                    type="time"
-                    value={time}
-                    onChange={(e) => setTime(e.target.value)}
-                    step="900"
-                    className="w-full h-11 bg-[#2C2C2E] border border-[#3A3A3C] rounded-xl text-white px-4 text-sm outline-none focus:border-[#9ffb00] transition-all box-border appearance-none"
-                  />
-                </div>
-              </div>
-            </div>
+            <DateTimeSelector
+              date={date}
+              time={time}
+              onDateChange={setDate}
+            />
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
@@ -655,6 +635,130 @@ export default function TableManagementModal({
             Отмена
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function formatDisplayDate(dateStr: string): string {
+  if (!dateStr) return "";
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+interface DateTimeSelectorProps {
+  date: string;
+  time: string;
+  onDateChange: (date: string) => void;
+}
+
+function DateTimeSelector({ date, time, onDateChange }: DateTimeSelectorProps) {
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [calendarYear, setCalendarYear] = useState(() => date ? new Date(date + "T00:00:00").getFullYear() : new Date().getFullYear());
+  const [calendarMonth, setCalendarMonth] = useState(() => date ? new Date(date + "T00:00:00").getMonth() : new Date().getMonth());
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+  const firstDayOfMonth = new Date(calendarYear, calendarMonth, 1).getDay();
+
+  const monthNames = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
+  const weekDays = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+
+  const prevMonth = () => {
+    if (calendarMonth === 0) { setCalendarMonth(11); setCalendarYear(y => y - 1); }
+    else setCalendarMonth(m => m - 1);
+  };
+
+  const nextMonth = () => {
+    if (calendarMonth === 11) { setCalendarMonth(0); setCalendarYear(y => y + 1); }
+    else setCalendarMonth(m => m + 1);
+  };
+
+  const selectDate = (day: number) => {
+    const selectedDate = new Date(calendarYear, calendarMonth, day);
+    onDateChange(selectedDate.toISOString().split("T")[0]);
+    setShowCalendar(false);
+  };
+
+  const isSelectedDate = (day: number) => {
+    if (!date) return false;
+    const d = new Date(calendarYear, calendarMonth, day);
+    return d.toISOString().split("T")[0] === date;
+  };
+
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-1">
+        <label className="text-[#98989D] text-xs">Дата</label>
+        <button
+          type="button"
+          onClick={() => setShowCalendar(!showCalendar)}
+          className="w-full h-11 bg-[#2C2C2E] border border-[#3A3A3C] rounded-xl px-4 flex items-center gap-2 hover:border-[#9ffb00]/50 transition-colors"
+        >
+          <Calendar className="w-4 h-4 text-[#636366]" />
+          <span className="text-white font-medium text-sm flex-1 text-left">
+            {date ? formatDisplayDate(date) : "Выберите дату"}
+          </span>
+        </button>
+
+        {showCalendar && (
+          <div className="absolute z-50 mt-1 bg-[#1C1C1E] border border-[#3A3A3C] rounded-2xl p-4 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <button onClick={prevMonth} className="p-1 hover:bg-[#3A3A3C] rounded-lg transition-colors">
+                <ChevronLeft className="w-5 h-5 text-[#98989D]" />
+              </button>
+              <span className="text-white font-semibold">{monthNames[calendarMonth]} {calendarYear}</span>
+              <button onClick={nextMonth} className="p-1 hover:bg-[#3A3A3C] rounded-lg transition-colors">
+                <ChevronRight className="w-5 h-5 text-[#98989D]" />
+              </button>
+            </div>
+            <div className="grid grid-cols-7 gap-1 mb-2">
+              {weekDays.map((d) => (
+                <div key={d} className="text-center text-[10px] text-[#636366] font-medium py-1">{d}</div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+              {Array.from({ length: firstDayOfMonth }).map((_, i) => <div key={`empty-${i}`} />)}
+              {Array.from({ length: daysInMonth }).map((_, i) => {
+                const day = i + 1;
+                const d = new Date(calendarYear, calendarMonth, day);
+                const isPast = d < today;
+                const isToday = d.getTime() === today.getTime();
+                const selected = isSelectedDate(day);
+                return (
+                  <button
+                    key={day}
+                    onClick={() => !isPast && selectDate(day)}
+                    disabled={isPast}
+                    className={`
+                      w-8 h-8 rounded-lg text-sm font-medium transition-all
+                      ${isPast ? "text-[#4A4A4C] cursor-not-allowed" : "hover:bg-[#3A3A3C]"}
+                      ${isToday && !selected ? "border border-[#9ffb00]/50 text-white" : ""}
+                      ${selected ? "bg-[#9ffb00] text-black font-bold" : "text-white"}
+                    `}
+                  >
+                    {day}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-1">
+        <label className="text-[#98989D] text-xs">Время</label>
+        <div className="w-full h-11 bg-[#2C2C2E] border border-[#3A3A3C] rounded-xl px-4 flex items-center gap-2">
+          <div className="w-4 h-4 flex items-center justify-center">
+            <div className="w-4 h-4 rounded-full border-2 border-[#636366]" />
+          </div>
+          <span className="text-white font-mono font-medium text-sm">
+            {time || "—:——"}
+          </span>
+        </div>
+        <p className="text-[10px] text-[#636366]">Выберите в таймлайне</p>
       </div>
     </div>
   );
