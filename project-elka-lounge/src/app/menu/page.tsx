@@ -2,6 +2,8 @@ import Link from "next/link";
 import { getMenu } from "@/app/actions/menu";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 export default async function MenuPage() {
   const menuItems = await getMenu();
@@ -19,38 +21,39 @@ export default async function MenuPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background p-6">
+    <div className="min-h-screen bg-graphite-base p-6">
       <Link 
         href="/" 
-        className="inline-flex items-center text-gray-400 hover:text-white mb-6"
+        className="inline-flex items-center text-on-surface-variant hover:text-primary-fixed mb-6 transition-colors"
       >
-        <span className="mr-2">←</span> На главную
+        <span className="material-symbols-outlined mr-2 text-xl">arrow_back</span>
+        На главную
       </Link>
 
-      <h1 className="text-3xl font-bold text-neon mb-8">Меню</h1>
+      <h1 className="text-3xl font-bold text-on-surface mb-8">Меню</h1>
 
       {menuItems.length === 0 ? (
         <div className="text-center py-20">
-          <p className="text-gray-500 text-lg">Меню загружается...</p>
+          <p className="text-on-surface-variant text-lg">Меню загружается...</p>
         </div>
       ) : (
         <div className="space-y-10">
           {Object.entries(groupedMenu).map(([category, items]) => (
             <div key={category}>
-              <h2 className="text-2xl font-bold text-white mb-4">{category}</h2>
+              <h2 className="text-2xl font-bold text-on-surface mb-4">{category}</h2>
               <div className="space-y-3">
                 {items.map((item) => (
                   <div
                     key={item.id}
                     className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
                       item.is_available
-                        ? "bg-[#121217] border-gray-800"
-                        : "bg-[#121217]/50 border-gray-800 opacity-50"
+                        ? "bg-graphite-card border-graphite-border"
+                        : "bg-graphite-card/50 border-graphite-border opacity-50"
                     }`}
                   >
                     <div className="flex-1">
                       <h3 className={`text-lg font-medium ${
-                        item.is_available ? "text-white" : "text-gray-500 line-through"
+                        item.is_available ? "text-on-surface" : "text-on-surface-variant line-through"
                       }`}>
                         {item.name}
                       </h3>
@@ -59,7 +62,7 @@ export default async function MenuPage() {
                       )}
                     </div>
                     <div className={`text-xl font-bold ${
-                      item.is_available ? "text-neon" : "text-gray-600"
+                      item.is_available ? "text-primary-fixed" : "text-graphite-border"
                     }`}>
                       {formatPrice(item.price)} ₽
                     </div>

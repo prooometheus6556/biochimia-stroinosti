@@ -49,14 +49,17 @@ export async function toggleMenuItemAvailability(
       .eq("id", itemId);
 
     if (error) {
+      console.error("DB update error:", error);
       return { success: false, message: error.message };
     }
 
-    revalidatePath("/menu");
-    revalidatePath("/admin");
+    revalidatePath("/menu", "page");
+    revalidatePath("/admin", "page");
+    
     return { success: true, message: "Статус обновлен" };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("Toggle availability error:", errorMessage);
     return { success: false, message: errorMessage };
   }
 }

@@ -27,13 +27,13 @@ export default function AgeGate() {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-surface flex items-center justify-center p-6">
+    <div className="fixed inset-0 z-50 bg-graphite-base flex items-center justify-center p-6">
       <div className="w-full max-w-md text-center space-y-8">
         <div className="space-y-4">
-          <div className="relative w-[180px] h-[180px] mx-auto rounded-full overflow-hidden shadow-[0_0_40px_rgba(159,251,0,0.3)]">
+          <div className="relative w-[180px] h-[180px] mx-auto rounded-full overflow-hidden shadow-[0_0_50px_rgba(159,251,0,0.3)]">
             <Image
               src="/logo.jpg"
-              alt="Elka Lounge Logo"
+              alt="Ёлка Lounge Logo"
               fill
               className="object-cover"
             />
@@ -43,7 +43,7 @@ export default function AgeGate() {
         </div>
 
         {isAdult === false ? (
-          <div className="bg-error-container text-on-error-container rounded-xl p-6">
+          <div className="bg-error-container text-on-error-container rounded-2xl p-6">
             <p className="text-lg">
               Извините, вход только для совершеннолетних
             </p>
@@ -52,13 +52,13 @@ export default function AgeGate() {
           <div className="space-y-4">
             <button
               onClick={handleConfirm}
-              className="w-full py-5 px-6 bg-primary-fixed hover:bg-primary-fixed-dim text-on-primary-fixed font-bold text-lg rounded-xl transition-all shadow-lg shadow-primary-fixed/30 active:scale-95"
+              className="w-full py-5 px-6 bg-primary-fixed hover:bg-primary-fixed-dim text-on-primary-fixed font-bold text-lg rounded-2xl transition-all shadow-[0_0_30px_rgba(159,251,0,0.4)] active:scale-95"
             >
               Да, мне есть 18
             </button>
             <button
               onClick={handleDeny}
-              className="w-full py-5 px-6 bg-surface-container-highest hover:bg-surface-container-high text-on-surface font-medium text-lg rounded-xl transition-colors"
+              className="w-full py-5 px-6 bg-graphite-card hover:bg-graphite-border text-on-surface font-medium text-lg rounded-2xl transition-colors border border-graphite-border"
             >
               Нет
             </button>
