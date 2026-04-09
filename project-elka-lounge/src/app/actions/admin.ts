@@ -5,7 +5,6 @@ import { revalidatePath } from "next/cache";
 import {
   validateTimeNotPast,
   validatePhysicalTableState,
-  validateReservationHasTable,
   getEffectiveDate,
 } from "@/lib/validators";
 
@@ -363,11 +362,27 @@ export async function updateReservationStatus(
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    if (newStatus === "seated") {
-      const tableCheck = await validateReservationHasTable(reservationId);
-      if (!tableCheck.valid) return { success: false, error: tableCheck.error };
+    // ИДEMPОТЕНТНОСТЬ: проверяем текущий статус
+    const { data: current } = await supabase
+      .from("reservations")
+      .select("id, status, table_id")
+      .eq("id", reservationId)
+      .maybeSingle();
 
-      const physicalCheck = await validatePhysicalTableState(tableCheck.tableId!, reservationId);
+    if (!current) {
+      return { success: false, error: "Бронь не найдена" };
+    }
+
+    // Если уже в нужном статусе — просто успех
+    if (current.status === newStatus) {
+      revalidatePath("/admin");
+      revalidatePath("/", "layout");
+      return { success: true };
+    }
+
+    // Для seated — проверяем только если это переход в seated
+    if (newStatus === "seated") {
+      const physicalCheck = await validatePhysicalTableState(current.table_id!, reservationId);
       if (!physicalCheck.valid) return { success: false, error: physicalCheck.error };
     }
 

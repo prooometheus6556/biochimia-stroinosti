@@ -23,9 +23,10 @@ const HIDE_AFTER_HOURS = 3;
 
 export default function UpcomingBookings({ reservations, tables, onReservationChange }: UpcomingBookingsProps) {
   const router = useRouter();
-  const [seatingReservationId, setSeatingReservationId] = useState<string | null>(null);
-  const [cancellingReservationId, setCancellingReservationId] = useState<string | null>(null);
+  const [pendingActions, setPendingActions] = useState<Set<string>>(new Set());
   const [, forceRender] = useState(0);
+
+  const isPending = (id: string) => pendingActions.has(id);
 
   const activeReservations = reservations
     .filter((r) => {
@@ -56,8 +57,9 @@ export default function UpcomingBookings({ reservations, tables, onReservationCh
       toast.error("У брони нет номера стола");
       return;
     }
+    if (isPending(reservation.id)) return;
 
-    setSeatingReservationId(reservation.id);
+    setPendingActions(prev => new Set(prev).add(reservation.id));
 
     try {
       const result = await updateReservationStatus(reservation.id, "seated");
@@ -71,12 +73,18 @@ export default function UpcomingBookings({ reservations, tables, onReservationCh
     } catch {
       toast.error("Ошибка при посадке гостя");
     } finally {
-      setSeatingReservationId(null);
+      setPendingActions(prev => {
+        const next = new Set(prev);
+        next.delete(reservation.id);
+        return next;
+      });
     }
   };
 
   const handleCancel = async (reservationId: string) => {
-    setCancellingReservationId(reservationId);
+    if (isPending(reservationId)) return;
+
+    setPendingActions(prev => new Set(prev).add(reservationId));
 
     try {
       const result = await updateReservationStatus(reservationId, "cancelled", true);
@@ -90,7 +98,11 @@ export default function UpcomingBookings({ reservations, tables, onReservationCh
     } catch {
       toast.error("Ошибка при отмене брони");
     } finally {
-      setCancellingReservationId(null);
+      setPendingActions(prev => {
+        const next = new Set(prev);
+        next.delete(reservationId);
+        return next;
+      });
     }
   };
 
@@ -119,12 +131,10 @@ export default function UpcomingBookings({ reservations, tables, onReservationCh
             {activeReservations.map((item) => {
               const tableName = getTableName(item.table_id, tables);
               const isBlocked = isBlockReservation(item);
-              const isSeating = seatingReservationId === item.id;
-              const isCancelling = cancellingReservationId === item.id;
-              const isProcessing = isSeating || isCancelling;
+              const pending = isPending(item.id);
 
               return (
-                <div key={item.id} className={`p-4 hover:bg-[#3A3A3C]/30 transition-colors ${isProcessing ? "opacity-50" : ""}`}>
+                <div key={item.id} className={`p-4 hover:bg-[#3A3A3C]/30 transition-colors ${pending ? "opacity-50" : ""}`}>
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
@@ -167,10 +177,10 @@ export default function UpcomingBookings({ reservations, tables, onReservationCh
                     <div className="space-y-2">
                       <button
                         onClick={() => handleSeatGuest(item)}
-                        disabled={isProcessing}
-                        className="w-full py-3 px-4 bg-[#9ffb00] hover:bg-[#8bdc00] text-black font-bold rounded-xl text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                        disabled={isPending(item.id)}
+                        className="w-full py-3 px-4 bg-[#9ffb00] hover:bg-[#8bdc00] text-black font-bold rounded-xl text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       >
-                        {isSeating ? (
+                        {isPending(item.id) ? (
                           <>
                             <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
                               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -187,11 +197,11 @@ export default function UpcomingBookings({ reservations, tables, onReservationCh
                       </button>
                       <button
                         onClick={() => handleCancel(item.id)}
-                        disabled={isProcessing}
-                        className="w-full py-2 px-4 bg-red-500/20 hover:bg-red-500/30 text-red-400 font-medium rounded-xl text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                        disabled={isPending(item.id)}
+                        className="w-full py-2 px-4 bg-red-500/20 hover:bg-red-500/30 text-red-400 font-medium rounded-xl text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       >
                         <UserX className="w-4 h-4" />
-                        {isCancelling ? "Отмена..." : "Неявка / Отмена"}
+                        {isPending(item.id) ? "Отмена..." : "Неявка / Отмена"}
                       </button>
                     </div>
                   )}

@@ -73,7 +73,9 @@ export default function TableManagementModal({
   const [durationHours, setDurationHours] = useState(3);
   const [isBlock, setIsBlock] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [, setProcessingId] = useState<string | null>(null);
+  const [pendingActions, setPendingActions] = useState<Set<string>>(new Set());
+
+  const isPending = (id: string) => pendingActions.has(id);
 
   const selectedTable = useMemo(() => tables.find((t) => t.id === selectedTableId), [tables, selectedTableId]);
 
@@ -96,12 +98,14 @@ export default function TableManagementModal({
       setSelectedTableId(initialTableId);
       setDate(getTodayLocalDate());
       setShowForm(false);
+      setPendingActions(new Set());
       resetForm();
     }
   }, [isOpen, initialTableId, resetForm]);
 
   const handleSeatGuest = async (reservationId: string) => {
-    setProcessingId(reservationId);
+    if (isPending(reservationId)) return;
+    setPendingActions(prev => new Set(prev).add(reservationId));
     try {
       const result = await updateReservationStatus(reservationId, "seated");
       if (!result.success) {
@@ -113,12 +117,17 @@ export default function TableManagementModal({
     } catch {
       toast.error("Ошибка");
     } finally {
-      setProcessingId(null);
+      setPendingActions(prev => {
+        const next = new Set(prev);
+        next.delete(reservationId);
+        return next;
+      });
     }
   };
 
   const handleCompleteReservation = async (reservationId: string) => {
-    setProcessingId(reservationId);
+    if (isPending(reservationId)) return;
+    setPendingActions(prev => new Set(prev).add(reservationId));
     try {
       const result = await updateReservationStatus(reservationId, "completed", true);
       if (!result.success) {
@@ -130,12 +139,17 @@ export default function TableManagementModal({
     } catch {
       toast.error("Ошибка");
     } finally {
-      setProcessingId(null);
+      setPendingActions(prev => {
+        const next = new Set(prev);
+        next.delete(reservationId);
+        return next;
+      });
     }
   };
 
   const handleCancelReservation = async (reservationId: string) => {
-    setProcessingId(reservationId);
+    if (isPending(reservationId)) return;
+    setPendingActions(prev => new Set(prev).add(reservationId));
     try {
       const result = await updateReservationStatus(reservationId, "cancelled", true);
       if (!result.success) {
@@ -147,7 +161,11 @@ export default function TableManagementModal({
     } catch {
       toast.error("Ошибка");
     } finally {
-      setProcessingId(null);
+      setPendingActions(prev => {
+        const next = new Set(prev);
+        next.delete(reservationId);
+        return next;
+      });
     }
   };
 
@@ -244,11 +262,11 @@ export default function TableManagementModal({
                   
                   <div className="flex gap-2 w-full mt-1">
                     {res.status === 'seated' ? (
-                        <button onClick={() => handleCompleteReservation(res.id)} className="bg-[#B5FF3B] text-black px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-[#a0e635] transition flex-1">Завершить</button>
+                        <button onClick={() => handleCompleteReservation(res.id)} disabled={isPending(res.id)} className="bg-[#B5FF3B] text-black px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-[#a0e635] transition flex-1 disabled:opacity-50 disabled:cursor-not-allowed">Завершить</button>
                     ) : (
                       <>
-                        <button onClick={() => handleSeatGuest(res.id)} className="bg-[#B5FF3B] text-black px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-[#a0e635] transition flex-1">Посадить</button>
-                        <button onClick={() => handleCancelReservation(res.id)} className="bg-[#2A2D32] text-white px-3 py-1.5 rounded-lg text-sm hover:bg-red-500/20 transition">Отмена</button>
+                        <button onClick={() => handleSeatGuest(res.id)} disabled={isPending(res.id)} className="bg-[#B5FF3B] text-black px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-[#a0e635] transition flex-1 disabled:opacity-50 disabled:cursor-not-allowed">Посадить</button>
+                        <button onClick={() => handleCancelReservation(res.id)} disabled={isPending(res.id)} className="bg-[#2A2D32] text-white px-3 py-1.5 rounded-lg text-sm hover:bg-red-500/20 transition disabled:opacity-50 disabled:cursor-not-allowed">Отмена</button>
                       </>
                     )}
                   </div>
