@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Users, Clock, MapPin, AlertTriangle } from "lucide-react";
-import { Reservation, Table } from "@/app/actions/admin";
+import { Users, Clock, MapPin, AlertTriangle, X, UserX } from "lucide-react";
+import { Reservation, Table, updateReservationStatus } from "@/app/actions/admin";
 import { toDisplayNumber } from "@/lib/tableDisplay";
 import { formatTimeLocal, parseToLocalDateTime, getHoursDiff } from "@/lib/datetime";
 
@@ -15,14 +15,16 @@ interface UpcomingBookingsProps {
   reservations: Reservation[];
   tables: Table[];
   onSeatGuest?: (reservationId: string, tableId: string) => void;
+  onReservationChange?: () => void;
 }
 
 const HIDE_AFTER_HOURS = 3;
 
-export default function UpcomingBookings({ reservations, tables, onSeatGuest }: UpcomingBookingsProps) {
+export default function UpcomingBookings({ reservations, tables, onSeatGuest, onReservationChange }: UpcomingBookingsProps) {
   const [seatingReservation, setSeatingReservation] = useState<string | null>(null);
   const [selectedTable, setSelectedTable] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [cancellingReservation, setCancellingReservation] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [, forceRender] = useState(0);
 
@@ -86,10 +88,30 @@ export default function UpcomingBookings({ reservations, tables, onSeatGuest }: 
     try {
       await onSeatGuest(reservationId, tableId);
       setMessage({ type: "success", text: "Гость успешно посажен!" });
+      onReservationChange?.();
     } catch {
       setMessage({ type: "error", text: "Ошибка при посадке гостя" });
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const handleCancel = async (reservationId: string) => {
+    setMessage(null);
+    setCancellingReservation(reservationId);
+
+    try {
+      const result = await updateReservationStatus(reservationId, "cancelled", true);
+      if (result.success) {
+        setMessage({ type: "success", text: "Бронь отменена" });
+        onReservationChange?.();
+      } else {
+        setMessage({ type: "error", text: result.message });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Ошибка при отмене брони" });
+    } finally {
+      setCancellingReservation(null);
     }
   };
 
@@ -199,18 +221,28 @@ export default function UpcomingBookings({ reservations, tables, onSeatGuest }: 
                           }}
                           className="py-3 px-4 bg-[#3A3A3C] hover:bg-[#4A4A4C] text-white rounded-xl transition-colors"
                         >
-                          ✕
+                          <X className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
                   ) : (
-                    <button
-                      onClick={() => setSeatingReservation(item.id)}
-                      disabled={isProcessing || freeTables.length === 0}
-                      className="w-full py-3 px-4 bg-[#9ffb00] hover:bg-[#8bdc00] text-black font-semibold rounded-xl text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {freeTables.length === 0 ? "Нет свободных столов" : "Посадить гостя"}
-                    </button>
+                    <div className="space-y-2">
+                      <button
+                        onClick={() => setSeatingReservation(item.id)}
+                        disabled={isProcessing || cancellingReservation === item.id || freeTables.length === 0}
+                        className="w-full py-3 px-4 bg-[#9ffb00] hover:bg-[#8bdc00] text-black font-semibold rounded-xl text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {freeTables.length === 0 ? "Нет свободных столов" : "Посадить гостя"}
+                      </button>
+                      <button
+                        onClick={() => handleCancel(item.id)}
+                        disabled={isProcessing || cancellingReservation === item.id}
+                        className="w-full py-2 px-4 bg-red-500/20 hover:bg-red-500/30 text-red-400 font-medium rounded-xl text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        <UserX className="w-4 h-4" />
+                        {cancellingReservation === item.id ? "Отмена..." : "Неявка / Отмена"}
+                      </button>
+                    </div>
                   ))}
 
                   {isBlocked && (

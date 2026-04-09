@@ -329,9 +329,25 @@ export async function createAdminReservation(data: AdminReservationData): Promis
   }
 }
 
+const NOVOSIBIRSK_OFFSET_HOURS = 7;
+
+function parseArrivalTimeMinutes(isoString: string | null | undefined): number | null {
+  if (!isoString) return null;
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return null;
+    const localTs = d.getTime() + (NOVOSIBIRSK_OFFSET_HOURS * 3600000);
+    const localDate = new Date(localTs);
+    return localDate.getHours() * 60 + localDate.getMinutes();
+  } catch {
+    return null;
+  }
+}
+
 export async function updateReservationStatus(
-  reservationId: string, 
-  status: Reservation["status"]
+  reservationId: string,
+  newStatus: Reservation["status"],
+  endEarly: boolean = false
 ): Promise<{ success: boolean; message: string }> {
   try {
     if (!supabaseUrl || !supabaseServiceKey) {
@@ -340,9 +356,28 @@ export async function updateReservationStatus(
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    const updateData: Record<string, unknown> = { status: newStatus };
+
+    if (endEarly) {
+      const { data: reservation } = await supabase
+        .from("reservations")
+        .select("arrival_time, expected_duration_minutes")
+        .eq("id", reservationId)
+        .single();
+
+      if (reservation?.arrival_time) {
+        const arrivalMinutes = parseArrivalTimeMinutes(reservation.arrival_time);
+        const now = new Date();
+        const nowMinutes = now.getHours() * 60 + now.getMinutes();
+        const actualMinutes = arrivalMinutes !== null ? nowMinutes - arrivalMinutes : reservation.expected_duration_minutes;
+        updateData.expected_duration_minutes = Math.max(30, actualMinutes);
+        console.log(`[UPDATE_STATUS] Early end: actual=${actualMinutes}min, arrival=${arrivalMinutes}, now=${nowMinutes}`);
+      }
+    }
+
     const { error } = await supabase
       .from("reservations")
-      .update({ status })
+      .update(updateData)
       .eq("id", reservationId);
 
     if (error) {

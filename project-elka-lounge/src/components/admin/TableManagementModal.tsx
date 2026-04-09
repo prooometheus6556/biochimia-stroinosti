@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { X, AlertTriangle, Check, Plus, Minus, CheckCircle2, XCircle } from "lucide-react";
-import { createAdminReservation } from "@/app/actions/admin";
+import { X, AlertTriangle, Check, Plus, Minus, CheckCircle2, XCircle, LogOut } from "lucide-react";
+import { createAdminReservation, updateReservationStatus } from "@/app/actions/admin";
 import { toDisplayNumber } from "@/lib/tableDisplay";
+import { formatTimeLocal } from "@/lib/datetime";
 import { toast } from "sonner";
 import { Table, Reservation } from "@/app/actions/admin";
 
@@ -58,6 +59,30 @@ function getTableReservationsForDay(
       return rDate === targetDate;
     })
     .filter((r) => r.status !== "completed" && r.status !== "cancelled");
+}
+
+function getCurrentSeatedReservation(
+  tableId: string,
+  reservations: Reservation[]
+): Reservation | null {
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  
+  return reservations
+    .filter((r) => {
+      if (r.table_id !== tableId) return false;
+      if (r.status !== "seated") return false;
+      const time = getLocalHoursMinutes(r.arrival_time);
+      if (!time) return false;
+      const resMinutes = time.hours * 60 + time.minutes;
+      return resMinutes <= nowMinutes && nowMinutes < resMinutes + r.expected_duration_minutes;
+    })
+    .sort((a, b) => {
+      const aTime = getLocalHoursMinutes(a.arrival_time);
+      const bTime = getLocalHoursMinutes(b.arrival_time);
+      if (!aTime || !bTime) return 0;
+      return aTime.hours * 60 + aTime.minutes - (bTime.hours * 60 + bTime.minutes);
+    })[0] ?? null;
 }
 
 function isBlockReservation(r: Reservation): boolean {
@@ -210,7 +235,31 @@ export default function TableManagementModal({
     }
   }, [isSubmitting, selectedTableIds, name, phone, date, time, guests, durationHours, isBlock, onSuccess, onClose]);
 
+  const handleGuestLeft = useCallback(async () => {
+    if (!initialTableId) return;
+    const seated = getCurrentSeatedReservation(initialTableId, reservations);
+    if (!seated) return;
+    
+    setIsSubmitting(true);
+    try {
+      const result = await updateReservationStatus(seated.id, "completed", true);
+      if (result.success) {
+        toast.success("Гость ушёл. Стол освобождён", { position: "top-center" });
+        onSuccess();
+        onClose();
+      } else {
+        toast.error(result.message, { position: "top-center", duration: 5000 });
+      }
+    } catch {
+      toast.error("Ошибка при освобождении стола", { position: "top-center" });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [initialTableId, reservations, onSuccess, onClose]);
+
   if (!isOpen) return null;
+
+  const currentSeatedReservation = initialTableId ? getCurrentSeatedReservation(initialTableId, reservations) : null;
 
   const selectedTimeMinutes =
     parseInt(time.split(":")[0]) * 60 + parseInt(time.split(":")[1]);
@@ -252,21 +301,57 @@ export default function TableManagementModal({
           <div className="bg-[#2C2C2E] rounded-xl p-3 flex-shrink-0">
             <div className="flex items-center justify-between">
               <span className="text-[#98989D] text-sm">Текущий статус</span>
-              <div
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
-                  isCurrentlyFree
-                    ? "bg-green-500/20 text-green-400"
-                    : "bg-orange-500/20 text-orange-400"
-                }`}
-              >
-                {isCurrentlyFree ? (
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                ) : (
-                  <XCircle className="w-3.5 h-3.5" />
-                )}
-                {isCurrentlyFree ? "Свободен сейчас" : "Занят сейчас"}
-              </div>
+              {currentSeatedReservation ? (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-500/20 text-green-400">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  Гость за столом
+                </div>
+              ) : (
+                <div
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                    isCurrentlyFree
+                      ? "bg-green-500/20 text-green-400"
+                      : "bg-orange-500/20 text-orange-400"
+                  }`}
+                >
+                  {isCurrentlyFree ? (
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  ) : (
+                    <XCircle className="w-3.5 h-3.5" />
+                  )}
+                  {isCurrentlyFree ? "Свободен сейчас" : "Занят сейчас"}
+                </div>
+              )}
             </div>
+            {currentSeatedReservation && (
+              <div className="mt-3 pt-3 border-t border-[#3A3A3C]">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 bg-green-500/20 rounded-full flex items-center justify-center">
+                    <span className="text-sm">👤</span>
+                  </div>
+                  <div>
+                    <p className="text-white font-medium text-sm">
+                      {currentSeatedReservation.guest?.name || "Гость"}
+                    </p>
+                    {currentSeatedReservation.guest?.phone && (
+                      <p className="text-[#98989D] text-xs">{currentSeatedReservation.guest.phone}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between text-xs text-[#98989D] mb-3">
+                  <span>За столом с {formatTimeLocal(currentSeatedReservation.arrival_time)}</span>
+                  <span>{formatDuration(currentSeatedReservation.expected_duration_minutes)}</span>
+                </div>
+                <button
+                  onClick={handleGuestLeft}
+                  disabled={isSubmitting}
+                  className="w-full py-3 px-4 bg-green-500 hover:bg-green-400 text-black font-bold rounded-xl text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  <LogOut className="w-4 h-4" />
+                  {isSubmitting ? "Освобождаю..." : "Гость ушёл (Освободить стол)"}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Timeline */}
