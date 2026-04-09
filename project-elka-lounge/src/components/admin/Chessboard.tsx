@@ -5,6 +5,7 @@ import { Building2, Gamepad2, Clock, Users, Phone, X, Check } from "lucide-react
 import { Table, Reservation } from "@/app/actions/admin";
 import TableManagementModal from "./TableManagementModal";
 import { toDisplayNumber, DISPLAY_TO_DB_NUMBER } from "@/lib/tableDisplay";
+import { formatTimeLocal } from "@/lib/datetime";
 
 interface ChessboardProps {
   tables: Table[];
@@ -48,13 +49,8 @@ const ControllerPattern = () => (
   </svg>
 );
 
-const formatTime = (dateString: string) => {
-  const date = new Date(dateString);
-  return date.toLocaleTimeString("ru-RU", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Asia/Novosibirsk",
-  });
+const formatTime = (dateString: string | null | undefined) => {
+  return formatTimeLocal(dateString);
 };
 
 export default function Chessboard({

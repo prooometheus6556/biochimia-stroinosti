@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Users, Clock, MapPin, AlertTriangle } from "lucide-react";
 import { Reservation, Table } from "@/app/actions/admin";
 import { toDisplayNumber } from "@/lib/tableDisplay";
+import { formatTimeLocal, parseToLocalDateTime, getHoursDiff } from "@/lib/datetime";
 
 function isBlockReservation(r: Reservation): boolean {
   const name = r.guest?.name ?? "";
@@ -16,43 +17,7 @@ interface UpcomingBookingsProps {
   onSeatGuest?: (reservationId: string, tableId: string) => void;
 }
 
-const TIMEZONE = 'Asia/Novosibirsk';
 const HIDE_AFTER_HOURS = 3;
-
-const formatOptions: Intl.DateTimeFormatOptions = {
-  timeZone: TIMEZONE,
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hour12: false,
-};
-
-function formatToParts(date: Date): string[] {
-  return date.toLocaleString('en-US', formatOptions).split(/[/\s:]/);
-}
-
-function parseToLocalTime(isoString: string | null | undefined): Date | null {
-  if (!isoString) return null;
-  const parts = formatToParts(new Date(isoString));
-  const [yearS, monthS, dayS, hourS, minuteS] = parts;
-  const d = new Date(Number(yearS), Number(monthS) - 1, Number(dayS), Number(hourS), Number(minuteS));
-  return isNaN(d.getTime()) ? null : d;
-}
-
-function getLocalNow(): Date {
-  const [yearS, monthS, dayS, hourS, minuteS] = formatToParts(new Date());
-  return new Date(Number(yearS), Number(monthS) - 1, Number(dayS), Number(hourS), Number(minuteS));
-}
-
-function getLocalHoursDiff(arrivalTimeISO: string | null | undefined): number {
-  const localNow = getLocalNow();
-  const arrivalLocal = parseToLocalTime(arrivalTimeISO ?? null);
-  if (!arrivalLocal) return -999;
-  return (localNow.getTime() - arrivalLocal.getTime()) / (1000 * 60 * 60);
-}
 
 export default function UpcomingBookings({ reservations, tables, onSeatGuest }: UpcomingBookingsProps) {
   const [seatingReservation, setSeatingReservation] = useState<string | null>(null);
@@ -64,13 +29,13 @@ export default function UpcomingBookings({ reservations, tables, onSeatGuest }: 
   const activeReservations = reservations
     .filter((r) => {
       if (r.status !== "waitlist" && r.status !== "confirmed") return false;
-      const hoursDiff = getLocalHoursDiff(r.arrival_time);
+      const hoursDiff = getHoursDiff(r.arrival_time);
       if (hoursDiff > HIDE_AFTER_HOURS) return false;
       return true;
     })
     .sort((a, b) => {
-      const aLocal = parseToLocalTime(a.arrival_time)?.getTime() ?? Infinity;
-      const bLocal = parseToLocalTime(b.arrival_time)?.getTime() ?? Infinity;
+      const aLocal = parseToLocalDateTime(a.arrival_time)?.getTime() ?? Infinity;
+      const bLocal = parseToLocalDateTime(b.arrival_time)?.getTime() ?? Infinity;
       return aLocal - bLocal;
     });
 
@@ -87,9 +52,7 @@ export default function UpcomingBookings({ reservations, tables, onSeatGuest }: 
   const freeTables = tables.filter((t) => !seatedTableIds.includes(t.id));
 
   const getTimeFromDate = (dateString: string | null | undefined) => {
-    const localDate = parseToLocalTime(dateString ?? null);
-    if (!localDate) return "—";
-    return localDate.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+    return formatTimeLocal(dateString);
   };
 
   const getTableName = (tableId: string | null, tables: Table[]) => {
@@ -97,6 +60,16 @@ export default function UpcomingBookings({ reservations, tables, onSeatGuest }: 
     const table = tables.find((t) => t.id === tableId);
     return table ? `Стол ${toDisplayNumber(table.number)}` : null;
   };
+
+  useEffect(() => {
+    console.log("[UpcomingBookings] Received reservations:", JSON.stringify(reservations, null, 2));
+    console.log("[UpcomingBookings] Active reservations:", JSON.stringify(activeReservations.map(r => ({
+      id: r.id,
+      arrival_time: r.arrival_time,
+      status: r.status,
+      guest: r.guest?.name
+    })), null, 2));
+  }, [reservations, activeReservations]);
 
   const handleSeat = async () => {
     if (!selectedTable || !seatingReservation || !onSeatGuest) return;

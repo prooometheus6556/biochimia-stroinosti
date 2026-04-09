@@ -18,6 +18,20 @@ interface TableManagementModalProps {
 
 const TZ = "Asia/Novosibirsk";
 
+function getLocalHoursMinutes(isoString: string | null | undefined): { hours: number; minutes: number } | null {
+  if (!isoString) return null;
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return null;
+    const formatted = d.toLocaleString("en-GB", { timeZone: TZ });
+    const [, timePart] = formatted.split(" ");
+    const [hours, minutes] = timePart.split(":").map(Number);
+    return { hours, minutes };
+  } catch {
+    return null;
+  }
+}
+
 function getDayStartLocal(): { date: string; time: string } {
   const now = new Date();
   const date = now.toLocaleDateString("en-CA", { timeZone: TZ });
@@ -75,10 +89,9 @@ function buildTimeline(reservations: Reservation[]): TimelineSlot[] {
 
     let matchedReservation: Reservation | null = null;
     for (const res of reservations) {
-      const resDate = new Date(res.arrival_time);
-      const resH = resDate.getHours();
-      const resM = resDate.getMinutes();
-      const resMinutes = resH * 60 + resM;
+      const time = getLocalHoursMinutes(res.arrival_time);
+      if (!time) continue;
+      const resMinutes = time.hours * 60 + time.minutes;
       const endMinutes = resMinutes + res.expected_duration_minutes;
       if (resMinutes <= slotMinutes && slotMinutes < endMinutes) {
         matchedReservation = res;
@@ -203,13 +216,12 @@ export default function TableManagementModal({
     parseInt(time.split(":")[0]) * 60 + parseInt(time.split(":")[1]);
   const isCurrentlyFree =
     !tableReservations.some(
-      (r) =>
-        (() => {
-          const rH = new Date(r.arrival_time).getHours();
-          const rM = new Date(r.arrival_time).getMinutes();
-          const rMin = rH * 60 + rM;
-          return rMin <= selectedTimeMinutes && rMin + r.expected_duration_minutes > selectedTimeMinutes;
-        })()
+      (r) => {
+        const t = getLocalHoursMinutes(r.arrival_time);
+        if (!t) return false;
+        const rMin = t.hours * 60 + t.minutes;
+        return rMin <= selectedTimeMinutes && rMin + r.expected_duration_minutes > selectedTimeMinutes;
+      }
     );
 
   return (
@@ -275,13 +287,12 @@ export default function TableManagementModal({
                 const isSelected =
                   parseInt(slot.label.split(":")[0]) === parseInt(time.split(":")[0]) &&
                   !slot.isPast;
-                const isConflict =
-                  !!slot.reservation &&
-                  (() => {
-                    const rH = new Date(slot.reservation!.arrival_time).getHours();
-                    const rM = new Date(slot.reservation!.arrival_time).getMinutes();
-                    return rH * 60 + rM === slot.hour * 60;
-                  })();
+                const isConflict = (() => {
+                  if (!slot.reservation) return false;
+                  const t = getLocalHoursMinutes(slot.reservation.arrival_time);
+                  if (!t) return false;
+                  return t.hours * 60 + t.minutes === slot.hour * 60;
+                })();
                 const isBlock = slot.reservation && isBlockReservation(slot.reservation!);
                 return (
                   <button
