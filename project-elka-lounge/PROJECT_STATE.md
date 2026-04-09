@@ -316,7 +316,7 @@ TELEGRAM_CHAT_ID=333906877
 
 | Окружение | URL | Примечание |
 |-----------|-----|------------|
-| Production | https://project-elka-lounge.vercel.app | Последний: 2e9nMsgrop7iUGNwd8MXJJvDWbif |
+| Production | https://project-elka-lounge.vercel.app | Последний: EiaVsBvVxngZzzMYGVY8FVbWVjVp |
 | Preview | vercel.app/*/project-elka-lounge | Перед merge |
 
 **⚠️ ВАЖНО: После каждой итерации обязательно запускать `npx vercel --prod` для деплоя в production!**
