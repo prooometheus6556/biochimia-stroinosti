@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { X, AlertTriangle, Plus, Minus, LogOut, Calendar, Clock, User, Phone, Trash2 } from "lucide-react";
+import { X, AlertTriangle, Plus, Minus } from "lucide-react";
 import { createAdminReservation, updateReservationStatus } from "@/app/actions/admin";
-import { formatTimeLocal, getCurrentTimeInLocalTZ } from "@/lib/datetime";
+import { formatTimeLocal, formatDateLocal, getCurrentTimeInLocalTZ } from "@/lib/datetime";
 import { toast } from "sonner";
 import { Table, Reservation } from "@/app/actions/admin";
 
@@ -40,14 +40,6 @@ function getDayStartLocal(): { date: string; time: string } {
   return { date, time };
 }
 
-function formatDuration(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (h === 0) return `${m}м`;
-  if (m === 0) return `${h}ч`;
-  return `${h}ч ${m}м`;
-}
-
 function getTableReservationsForDay(
   tableId: string,
   reservations: Reservation[],
@@ -77,12 +69,6 @@ const SMALL_CAPACITY = 2;
 function isSmallTable(table: Table): boolean {
   return SMALL_TABLES.includes(String(table.number)) || table.capacity === SMALL_CAPACITY;
 }
-
-const BLOCK_SUGGESTIONS = [
-  "БЛОК: Сдвиг столов",
-  "БЛОК: Тех. перерыв",
-  "БЛОК: Корпоратив",
-];
 
 export default function TableManagementModal({
   isOpen,
@@ -135,16 +121,16 @@ export default function TableManagementModal({
     }
   }, [isOpen, initialTableId, todayDefaults, resetForm]);
 
-  const handleSeatGuest = async (reservation: Reservation) => {
-    setProcessingId(reservation.id);
+  const handleSeatGuest = async (reservationId: string) => {
+    setProcessingId(reservationId);
     try {
-      const result = await updateReservationStatus(reservation.id, "seated");
-      if (result.success) {
-        toast.success("Гость посажен");
-        onSuccess();
-      } else {
-        toast.error(result.message);
+      const result = await updateReservationStatus(reservationId, "seated");
+      if (!result.success) {
+        toast.error(result.error ?? "Ошибка при посадке гостя");
+        return;
       }
+      toast.success("Гость посажен");
+      onSuccess();
     } catch {
       toast.error("Ошибка");
     } finally {
@@ -152,16 +138,16 @@ export default function TableManagementModal({
     }
   };
 
-  const handleFreeTable = async (reservation: Reservation) => {
-    setProcessingId(reservation.id);
+  const handleCompleteReservation = async (reservationId: string) => {
+    setProcessingId(reservationId);
     try {
-      const result = await updateReservationStatus(reservation.id, "completed", true);
-      if (result.success) {
-        toast.success("Стол освобождён");
-        onSuccess();
-      } else {
-        toast.error(result.message);
+      const result = await updateReservationStatus(reservationId, "completed", true);
+      if (!result.success) {
+        toast.error(result.error ?? "Ошибка при завершении");
+        return;
       }
+      toast.success("Стол освобождён");
+      onSuccess();
     } catch {
       toast.error("Ошибка");
     } finally {
@@ -169,16 +155,16 @@ export default function TableManagementModal({
     }
   };
 
-  const handleCancel = async (reservation: Reservation) => {
-    setProcessingId(reservation.id);
+  const handleCancelReservation = async (reservationId: string) => {
+    setProcessingId(reservationId);
     try {
-      const result = await updateReservationStatus(reservation.id, "cancelled", true);
-      if (result.success) {
-        toast.success("Бронь отменена");
-        onSuccess();
-      } else {
-        toast.error(result.message);
+      const result = await updateReservationStatus(reservationId, "cancelled", true);
+      if (!result.success) {
+        toast.error(result.error ?? "Ошибка при отмене");
+        return;
       }
+      toast.success("Бронь отменена");
+      onSuccess();
     } catch {
       toast.error("Ошибка");
     } finally {
@@ -235,12 +221,18 @@ export default function TableManagementModal({
     }
   }, [isSubmitting, selectedTableId, date, time, name, phone, guests, durationHours, isBlock, isCurrentTableSmall, resetForm, onSuccess]);
 
+  const isCurrentlySeated = useMemo(() => {
+    return tableReservations.some(r => r.status === "seated");
+  }, [tableReservations]);
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-[#1C1C1E] border border-white/10 rounded-2xl p-5 w-full max-w-md shadow-2xl max-h-[92vh] flex flex-col overflow-hidden">
+
+        {/* Закрыть — только в углу, не внизу */}
         <button
           onClick={onClose}
           className="absolute top-4 right-4 text-[#98989D] hover:text-white transition-colors z-10"
@@ -248,291 +240,236 @@ export default function TableManagementModal({
           <X className="w-5 h-5" />
         </button>
 
-        <div className="text-center mb-4 flex-shrink-0">
-          <div className="w-14 h-14 bg-[#9ffb00]/20 rounded-full flex items-center justify-center mx-auto mb-2">
-            <span className="text-3xl font-black text-[#9ffb00]">
-              {selectedTable?.number ?? "?"}
-            </span>
+        {/* Заголовок */}
+        <div className="flex items-center justify-between mb-4 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-[#9ffb00]/20 rounded-full flex items-center justify-center">
+              <span className="text-2xl font-black text-[#9ffb00]">
+                {selectedTable?.number ?? "?"}
+              </span>
+            </div>
+            <div>
+              <h2 className="text-white text-lg font-bold leading-tight">
+                Стол {selectedTable?.number}
+              </h2>
+              <span className="text-[#636366] text-xs">{formatDateLocal(date + "T00:00:00")}</span>
+            </div>
           </div>
-          <h2 className="text-xl font-bold text-white">
-            Расписание стола {selectedTable?.number}
-          </h2>
-          {isCurrentTableSmall && (
-            <span className="text-xs text-orange-400">Малый стол (до 2 гостей)</span>
-          )}
+          <span className={`text-xs px-2 py-1 rounded-md ${
+            isCurrentlySeated
+              ? "bg-orange-500/20 text-orange-400"
+              : "bg-green-500/20 text-green-400"
+          }`}>
+            {isCurrentlySeated ? "За столом" : "Свободен"}
+          </span>
         </div>
 
-        <div className="flex items-center gap-2 mb-4 flex-shrink-0">
-          <div className="relative flex-1">
-            <button
-              type="button"
-              onClick={() => {}}
-              className="w-full h-10 bg-[#2C2C2E] border border-[#3A3A3C] rounded-xl px-3 flex items-center gap-2 hover:border-[#9ffb00]/50 transition-colors text-sm"
-            >
-              <Calendar className="w-4 h-4 text-[#636366]" />
-              <span className="text-white">{formatDisplayDate(date)}</span>
-            </button>
-          </div>
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className={`h-10 px-4 rounded-xl font-semibold text-sm transition-all ${
-              showForm
-                ? "bg-[#9ffb00] text-black"
-                : "bg-[#2C2C2E] text-white hover:bg-[#3A3A3C]"
-            }`}
-          >
-            <Plus className="w-4 h-4 inline mr-1" />
-            Добавить
-          </button>
-        </div>
+        {/* Timeline-лента */}
+        <div className="flex-1 overflow-y-auto min-h-0 pr-1 mr-1">
+          <div className="flex flex-col gap-2 w-full">
 
-        <div className="flex-1 overflow-y-auto space-y-3 pr-1 mr-1 min-h-0">
-          {showForm && (
-            <div className="bg-[#2C2C2E] rounded-xl p-4 space-y-3 border border-[#9ffb00]/30">
-              <h3 className="text-white font-semibold text-sm">Новая бронь</h3>
-              
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setIsBlock(false)}
-                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
-                    !isBlock ? "bg-[#9ffb00] text-black" : "bg-[#3A3A3C] text-[#98989D]"
-                  }`}
-                >
-                  Гость
-                </button>
-                <button
-                  onClick={() => setIsBlock(true)}
-                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1 ${
-                    isBlock ? "bg-orange-500 text-white" : "bg-[#3A3A3C] text-[#98989D]"
-                  }`}
-                >
-                  <AlertTriangle className="w-4 h-4" />Блок
-                </button>
+            {/* Пусто */}
+            {tableReservations.length === 0 && !showForm && (
+              <div className="text-center py-6 text-[#636366] text-sm">
+                Нет броней на сегодня
               </div>
+            )}
 
-              {isBlock && (
-                <div className="flex flex-wrap gap-1">
-                  {BLOCK_SUGGESTIONS.map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => setName(s)}
-                      className="text-xs px-2 py-1 bg-orange-500/20 text-orange-400 rounded-lg hover:bg-orange-500/30"
-                    >
-                      {s}
-                    </button>
-                  ))}
+            {/* Карточки */}
+            {tableReservations.map((res) => {
+              const isBlocked = isBlockReservation(res);
+              const startTime = formatTimeLocal(res.arrival_time);
+              const isProcessing = processingId === res.id;
+              const durHours = Math.floor(res.expected_duration_minutes / 60);
+              const durText = durHours >= 1 ? `${durHours} ч` : `${res.expected_duration_minutes}м`;
+
+              return (
+                <div
+                  key={res.id}
+                  className={`flex flex-row items-center justify-between bg-[#1A1D21] border border-[#2A2D32] p-3 rounded-xl ${
+                    isBlocked ? "border-orange-500/30" : res.status === "seated" ? "border-green-500/30" : ""
+                  }`}
+                >
+                  {/* Левая часть: Время */}
+                  <div className="flex flex-col min-w-[60px]">
+                    <span className={`text-white font-bold text-base leading-tight ${isBlocked ? "text-orange-400" : ""}`}>
+                      {startTime}
+                    </span>
+                    <span className="text-[#636366] text-[10px]">{durText}</span>
+                  </div>
+
+                  {/* Центр: Гость */}
+                  <div className="flex flex-col flex-1 border-l border-[#2A2D32] ml-2 pl-2 text-left">
+                    <span className={`text-sm font-medium ${isBlocked ? "text-orange-400" : "text-white"}`}>
+                      {res.guest?.name || "Гость"}
+                    </span>
+                    <span className="text-[#636366] text-[10px]">
+                      {res.guest?.phone || "—"}
+                    </span>
+                  </div>
+
+                  {/* Правая часть: Кнопки */}
+                  <div className="flex flex-col items-end gap-1.5 ml-2">
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                      res.status === "seated"
+                        ? "bg-green-500/20 text-green-400"
+                        : isBlocked
+                        ? "bg-orange-500/20 text-orange-400"
+                        : "bg-[#9ffb00]/15 text-[#9ffb00]"
+                    }`}>
+                      {res.status === "seated" ? "За столом" : isBlocked ? "Блок" : "Ожидает"}
+                    </span>
+
+                    {isProcessing ? (
+                      <span className="w-4 h-4 border border-current border-t-transparent rounded-full animate-spin" />
+                    ) : res.status === "seated" ? (
+                      /* Seated: Завершить + Закрыть inline */
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => handleCompleteReservation(res.id)}
+                          className="bg-[#9ffb00] text-black px-2 py-1 rounded-lg text-[10px] font-bold hover:bg-[#8bdc00] transition"
+                        >
+                          Завершить
+                        </button>
+                        <button
+                          onClick={onClose}
+                          className="bg-[#2A2D32] text-white px-2 py-1 rounded-lg text-[10px] font-medium hover:bg-[#3A3A3C] transition"
+                        >
+                          Закрыть
+                        </button>
+                      </div>
+                    ) : (
+                      /* Не seated: Посадить + Отмена */
+                      <div className="flex gap-1">
+                        {!isBlocked && (
+                          <button
+                            onClick={() => handleSeatGuest(res.id)}
+                            className="bg-[#9ffb00] text-black px-2 py-1 rounded-lg text-[10px] font-bold hover:bg-[#8bdc00] transition"
+                          >
+                            Посадить
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleCancelReservation(res.id)}
+                          className="bg-[#2A2D32] text-white px-2 py-1 rounded-lg text-[10px] hover:bg-red-500/20 hover:text-red-400 transition"
+                        >
+                          Отмена
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
+              );
+            })}
 
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder={isBlock ? "БЛОК: Название..." : "Имя гостя"}
-                className="w-full h-10 bg-[#1C1C1E] border border-[#3A3A3C] rounded-lg text-white px-3 text-sm outline-none focus:border-[#9ffb00]"
-              />
+            {/* Форма создания */}
+            {showForm && (
+              <div className="bg-[#2C2C2E] rounded-xl p-3 space-y-2 border border-[#9ffb00]/30">
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setIsBlock(false)}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      !isBlock ? "bg-[#9ffb00] text-black" : "bg-[#3A3A3C] text-[#98989D]"
+                    }`}
+                  >
+                    Гость
+                  </button>
+                  <button
+                    onClick={() => setIsBlock(true)}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1 ${
+                      isBlock ? "bg-orange-500 text-white" : "bg-[#3A3A3C] text-[#98989D]"
+                    }`}
+                  >
+                    <AlertTriangle className="w-3 h-3" />Блок
+                  </button>
+                </div>
 
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="Телефон"
-                className="w-full h-10 bg-[#1C1C1E] border border-[#3A3A3C] rounded-lg text-white px-3 text-sm outline-none focus:border-[#9ffb00]"
-              />
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder={isBlock ? "БЛОК: Название..." : "Имя гостя"}
+                  className="w-full h-9 bg-[#1C1C1E] border border-[#3A3A3C] rounded-lg text-white px-3 text-sm outline-none focus:border-[#9ffb00]"
+                />
 
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="text-[#636366] text-xs mb-1 block">Время</label>
+                <div className="grid grid-cols-3 gap-2">
                   <select
                     value={time}
                     onChange={(e) => setTime(e.target.value)}
-                    className="w-full h-10 bg-[#1C1C1E] border border-[#3A3A3C] rounded-lg text-white px-2 text-sm outline-none focus:border-[#9ffb00]"
+                    className="h-9 bg-[#1C1C1E] border border-[#3A3A3C] rounded-lg text-white px-2 text-sm outline-none focus:border-[#9ffb00]"
                   >
-                    <option value="">--:--</option>
+                    <option value="">Время</option>
                     {Array.from({ length: 28 }, (_, i) => {
                       const h = Math.floor(i / 2) + 12;
                       const m = (i % 2) * 30;
                       const displayH = h >= 24 ? h - 24 : h;
                       const timeStr = `${String(displayH).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-                      return (
-                        <option key={timeStr} value={timeStr}>{timeStr}</option>
-                      );
+                      return <option key={timeStr} value={timeStr}>{timeStr}</option>;
                     })}
                   </select>
-                </div>
-                <div>
-                  <label className="text-[#636366] text-xs mb-1 block">Гостей</label>
-                  <div className="flex items-center h-10 bg-[#1C1C1E] border border-[#3A3A3C] rounded-lg">
+                  <div className="flex items-center h-9 bg-[#1C1C1E] border border-[#3A3A3C] rounded-lg overflow-hidden">
                     <button
                       onClick={() => setGuests((g) => Math.max(1, g - 1))}
-                      className="px-2 text-[#98989D]"
+                      className="px-2 text-[#98989D] hover:text-white"
                     >
-                      <Minus className="w-4 h-4" />
+                      <Minus className="w-3.5 h-3.5" />
                     </button>
-                    <span className="flex-1 text-center text-white text-sm">{guests}</span>
+                    <span className="flex-1 text-center text-white text-xs">{guests} 👤</span>
                     <button
                       onClick={() => setGuests((g) => Math.min(maxGuests, g + 1))}
-                      className="px-2 text-[#98989D]"
+                      className="px-2 text-[#98989D] hover:text-white"
                     >
-                      <Plus className="w-4 h-4" />
+                      <Plus className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                </div>
-                <div>
-                  <label className="text-[#636366] text-xs mb-1 block">Часов</label>
                   <select
                     value={durationHours}
                     onChange={(e) => setDurationHours(parseInt(e.target.value))}
-                    className="w-full h-10 bg-[#1C1C1E] border border-[#3A3A3C] rounded-lg text-white px-2 text-sm outline-none focus:border-[#9ffb00]"
+                    className="h-9 bg-[#1C1C1E] border border-[#3A3A3C] rounded-lg text-white px-2 text-sm outline-none focus:border-[#9ffb00]"
                   >
                     {[1, 2, 3, 4, 5, 6, 7, 8].map((h) => (
                       <option key={h} value={h}>{h}ч</option>
                     ))}
                   </select>
                 </div>
-              </div>
 
-              <div className="flex gap-2">
-                <button
-                  onClick={handleSubmit}
-                  disabled={isSubmitting || !name.trim() || !time}
-                  className={`flex-1 py-2.5 rounded-lg font-semibold text-sm transition-all ${
-                    !isSubmitting && name.trim() && time
-                      ? isBlock
-                        ? "bg-orange-500 hover:bg-orange-400 text-white"
-                        : "bg-[#9ffb00] hover:bg-[#8bdc00] text-black"
-                      : "bg-[#3A3A3C] text-[#636366]"
-                  }`}
-                >
-                  {isSubmitting ? "..." : isBlock ? "Заблокировать" : "Создать"}
-                </button>
-                <button
-                  onClick={() => { setShowForm(false); resetForm(); }}
-                  className="py-2.5 px-4 bg-[#3A3A3C] text-white rounded-lg text-sm"
-                >
-                  Отмена
-                </button>
-              </div>
-            </div>
-          )}
-
-          {tableReservations.length === 0 && !showForm ? (
-            <div className="text-center py-12">
-              <Clock className="w-12 h-12 text-[#3A3A3C] mx-auto mb-3" />
-              <p className="text-[#98989D]">Нет броней на этот день</p>
-              <p className="text-[#636366] text-sm">Нажмите +Добавить+ чтобы создать</p>
-            </div>
-          ) : (
-            tableReservations.map((res) => {
-              const isBlocked = isBlockReservation(res);
-              const startTime = formatTimeLocal(res.arrival_time);
-              const endTime = (() => {
-                const t = getLocalHoursMinutes(res.arrival_time);
-                if (!t) return "--:--";
-                const endMinutes = t.hours * 60 + t.minutes + res.expected_duration_minutes;
-                const endH = Math.floor(endMinutes / 60) % 24;
-                const endM = endMinutes % 60;
-                return `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
-              })();
-              const isProcessing = processingId === res.id;
-
-              return (
-                <div
-                  key={res.id}
-                  className={`bg-[#2C2C2E] rounded-xl p-3 border ${
-                    isBlocked ? "border-orange-500/30" : "border-[#3A3A3C]"
-                  }`}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                        isBlocked ? "bg-orange-500/20" : res.status === "seated" ? "bg-green-500/20" : "bg-[#9ffb00]/20"
-                      }`}>
-                        <Clock className={`w-5 h-5 ${
-                          isBlocked ? "text-orange-400" : res.status === "seated" ? "text-green-400" : "text-[#9ffb00]"
-                        }`} />
-                      </div>
-                      <div>
-                        <p className={`font-bold ${isBlocked ? "text-orange-400" : "text-white"}`}>
-                          {startTime} — {endTime}
-                        </p>
-                        <p className="text-xs text-[#98989D]">{formatDuration(res.expected_duration_minutes)}</p>
-                      </div>
-                    </div>
-                    <div className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                      res.status === "seated"
-                        ? "bg-green-500/20 text-green-400"
-                        : isBlocked
-                        ? "bg-orange-500/20 text-orange-400"
-                        : "bg-[#9ffb00]/20 text-[#9ffb00]"
-                    }`}>
-                      {res.status === "seated" ? "Сидит" : isBlocked ? "Блок" : "Ждёт"}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 mb-2 text-sm">
-                    <User className="w-4 h-4 text-[#636366]" />
-                    <span className={isBlocked ? "text-orange-400" : "text-white"}>
-                      {res.guest?.name || "Гость"}
-                    </span>
-                  </div>
-
-                  {!isBlocked && res.guest?.phone && (
-                    <div className="flex items-center gap-2 mb-3 text-sm">
-                      <Phone className="w-4 h-4 text-[#636366]" />
-                      <span className="text-[#98989D]">{res.guest.phone}</span>
-                    </div>
-                  )}
-
-                  <div className="flex gap-2">
-                    {res.status !== "seated" && !isBlocked && (
-                      <button
-                        onClick={() => handleSeatGuest(res)}
-                        disabled={isProcessing}
-                        className="flex-1 py-2 bg-[#9ffb00] hover:bg-[#8bdc00] text-black rounded-lg text-sm font-medium transition-all disabled:opacity-50"
-                      >
-                        Посадить
-                      </button>
-                    )}
-                    {res.status === "seated" && (
-                      <button
-                        onClick={() => handleFreeTable(res)}
-                        disabled={isProcessing}
-                        className="flex-1 py-2 bg-green-500 hover:bg-green-400 text-black rounded-lg text-sm font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-1"
-                      >
-                        <LogOut className="w-4 h-4" />
-                        Ушёл
-                      </button>
-                    )}
-                    <button
-                      onClick={() => handleCancel(res)}
-                      disabled={isProcessing}
-                      className="py-2 px-3 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm transition-all disabled:opacity-50"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleSubmit}
+                    disabled={isSubmitting || !name.trim() || !time}
+                    className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${
+                      !isSubmitting && name.trim() && time
+                        ? isBlock
+                          ? "bg-orange-500 hover:bg-orange-400 text-white"
+                          : "bg-[#9ffb00] hover:bg-[#8bdc00] text-black"
+                        : "bg-[#3A3A3C] text-[#636366]"
+                    }`}
+                  >
+                    {isSubmitting ? "..." : isBlock ? "Заблокировать" : "Создать"}
+                  </button>
+                  <button
+                    onClick={() => { setShowForm(false); resetForm(); }}
+                    className="px-3 py-2 bg-[#3A3A3C] text-white rounded-lg text-sm hover:bg-[#4A4A4C]"
+                  >
+                    ×
+                  </button>
                 </div>
-              );
-            })
-          )}
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="mt-4 pt-3 border-t border-[#3A3A3C] flex-shrink-0">
+        {/* Dotted кнопка внизу — ВСЕГДА видна */}
+        {!showForm && (
           <button
-            onClick={onClose}
-            className="w-full py-2.5 bg-[#3A3A3C] hover:bg-[#4A4A4C] text-white rounded-xl text-sm font-medium transition-all"
+            onClick={() => setShowForm(true)}
+            className="w-full mt-3 pt-3 border-t border-dashed border-[#3A3A3C] text-[#636366] py-2 hover:text-[#9ffb00] hover:border-[#9ffb00]/50 transition font-medium text-sm flex items-center justify-center gap-2"
           >
-            Закрыть
+            <Plus className="w-4 h-4" />
+            Добавить бронь на этот стол
           </button>
-        </div>
+        )}
       </div>
     </div>
   );
-}
-
-function formatDisplayDate(dateStr: string): string {
-  if (!dateStr) return "";
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
